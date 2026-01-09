@@ -21,7 +21,6 @@ static void TASK1_Thread(void *arg) {
 	fan.init();
 	rgb_led.init();
 	for ( ; ; ) {
-		dht11.read();
 		uint16_t val = dht11.get_temperature();
 		nixie_tube.show_num(val);
 		if (val <= 25) {
@@ -37,6 +36,7 @@ static void TASK1_Thread(void *arg) {
 
 static void task1_releases(void) {
 	nixie_tube.off();
+	dht11.stop();
 	fan.set_speed(0);
 	for (int i = 0; i < 2; i++) hmi.send_string("t0.txt", "任务已停止");
 }
@@ -47,15 +47,15 @@ static void task1_releases(void) {
 static void waterfall_led(void)
 {
 	rgb_led.set_color(COLOR_BLUE);
-	delay_1ms(1000);
+	delay_ms(1000);
 	rgb_led.set_color(COLOR_YELLOW);
-	delay_1ms(1000);
+	delay_ms(1000);
 	beep.control(1);
 	rgb_led.set_color(COLOR_WHITE);
-	delay_1ms(1000);
+	delay_ms(1000);
 	beep.control(0);
 	rgb_led.off();
-	delay_1ms(3000);
+	delay_ms(3000);
 }
 
 static void TASK2_Thread(void *arg)
@@ -65,7 +65,7 @@ static void TASK2_Thread(void *arg)
     for (;;) 
     {
 			waterfall_led();
-			delay_1ms(10);
+			delay_ms(10);
     }
 }
 static void task2_releases(void) {
@@ -85,17 +85,17 @@ static void bkrc_callback(uint8_t data) {
 				for (int i = 0; i < 3; i++) {
 					beep.control(1);
 					rgb_led.set_color(COLOR_RED);
-					delay_1ms(500);
+					delay_ms(500);
 					beep.control(0);
 					rgb_led.set_color(COLOR_OFF);
-					delay_1ms(500);
+					delay_ms(500);
 				}
 				break;
 			case 27:
 				hmi.printf("t0.txt", "安全模式");
 				for (int i = 100; i >= 0; i--) {
 					rgb_led.set_pwm_timer(COLOR_BLUE, i, LED_DEFAULT_FREQ);
-					delay_1ms(15);
+					delay_ms(15);
 				}
 				break;
 	}
@@ -137,7 +137,7 @@ static void TASK4_Thread(void *arg) {
 			rgb_led.blink_control(COLOR_GREEN, 500);
 			beep.control(0);
 		}
-		delay_1ms(10);
+		delay_ms(10);
 	}
 }
 static void task4_releases(void) {
@@ -156,7 +156,6 @@ static void TASK5_Thread(void *arg) {
     dht11.init();
 		ds18b20.init();
     rtc_clock_config();
-    hmi.printf("t7.txt", "温湿度控制系统");
 		static RTC_Time time_history[TIME_HISTORY_SIZE];
 		static char txts[][30] = {
 			"t14.txt",
@@ -184,10 +183,10 @@ static void TASK5_Thread(void *arg) {
         time_history[0] = current_time; // 最新时间放在索引 0
 
         // 发送温湿度数据到曲线
-        dht11.read();
-        hmi.send_to_curve("s0", 0, ds18b20.get_temperature(), 0, 120);
+        hmi.send_to_curve("s0", 0, dht11.get_temperature(), 0, 120);
         hmi.send_to_curve("s0", 1, dht11.get_humidity(), 0, 120);
-
+				hmi.printf("t7.txt", "当前温度为%d℃", dht11.get_temperature());
+				hmi.printf("t15.txt", "当前湿度为%d%%", dht11.get_humidity());
         // 显示时间到 HMI
 				for (int i = 0; i < TIME_HISTORY_SIZE; i++) {
 					hmi.printf(txts[i], "%d:%d", time_history[i].minute, time_history[i].second);
@@ -198,6 +197,7 @@ static void TASK5_Thread(void *arg) {
 }
 
 static void task5_releases(void) {
+	dht11.stop();
 	for (int i = 0; i < 2; i++) hmi.send_string("t0.txt", "任务已停止");
 }
 //DHT11测温任务 END
@@ -221,7 +221,7 @@ static void TASK6_Thread(void *arg) {
 		else if (light_flag == 1) light -= 20;
 		if (light >= 100) light_flag = 1;
 		else if (light == 0) light_flag = 0;
-		delay_1ms(10);
+		delay_ms(10);
 	}
 }
 
@@ -244,7 +244,7 @@ static void TASK7_Thread(void *arg) {
 		for (int i = 0; i < 3; i++) if (slider_vals[i] > val) val = slider_vals[i];
 		rgb_led.set_pwm_timer((Color){slider_vals[0], slider_vals[1], slider_vals[2]}, val, LED_DEFAULT_FREQ);
 		LOG_I("%d", val);
-		delay_1ms(10);
+		delay_ms(10);
 	}
 }
 
@@ -265,25 +265,40 @@ static void rc522_log_callback(const char *fmt, ...) {
 		hmi.send_string("t0.txt", formattedData);
 }
 
+static volatile uint8_t task8_running = 0;
+
 static void task8_read_card(void *arg) {
+	if (!task8_running) {
+			hmi.send_string("t0.txt", "TASK8未运行，禁止读卡");
+			return;
+	}
 	LOG_I("read");
-	rc522.read(10, 0, NULL);
+	rc522.read(3, 2, NULL);
 }
 
 static void task8_write_card(void *arg) {
+	if (!task8_running) {
+			hmi.send_string("t0.txt", "TASK8未运行，禁止写卡");
+			return;
+	}
 	LOG_I("write");
 	rc522.write(10, 0, "KAUNG");
 }
 
 static void TASK8_Thread(void *arg) {
+	task8_running = 1;  // ✅ 标记任务已运行
 	rc522.init();
+	oled.init();
 	rc522.log = rc522_log_callback;
+	hmi.printf("t0.txt",  "任务已开始请插入%s端口", rc522.port_name);
 	for ( ; ; ) {
-			delay_1ms(1000);
+			delay_ms(1000);
 	}
 }
 
 static void task8_releases(void) {
+	task8_running = 0;     // ✅ 标记任务已停止
+  rc522.log = NULL;      // 可选：避免停止后还打印/误用
 	for (int i = 0; i < 2; i++) hmi.send_string("t0.txt", "任务已停止");
 }
 //RC522刷卡任务 END
@@ -307,7 +322,7 @@ static void TASK9_Thread(void *arg) {
 	c1016.init();
 	vTaskDelete(NULL);
 	for ( ; ; ) {
-			delay_1ms(1000);
+			delay_ms(1000);
 	}
 }
 
@@ -321,7 +336,7 @@ static void TASK10_Thread(void *arg) {
 	beep.init();
 	beep.play_music(music_example_7, music_example_7_size);
 	for ( ; ; ) {
-			delay_1ms(1000);
+			delay_ms(1000);
 	}
 }
 
@@ -424,7 +439,7 @@ static void TASK12_Thread(void *arg) {
 	keyboard.ch455g_callback = keyboard_callback;
 	for ( ; ; ) {
 		keyboard.read();
-		delay_1ms(10);
+		delay_ms(10);
 	}
 }
 
@@ -464,7 +479,7 @@ static void TASK13_Thread(void *arg) {
 		char buffer[256];
 		snprintf(buffer, sizeof(buffer), "当前舵机角度为：%d 度", angle);
 		hmi.send_string("t0.txt", buffer);
-		delay_1ms(10);
+		delay_ms(10);
 	}
 }
 
@@ -508,7 +523,7 @@ static void TASK15_Thread(void *arg) {
 				step_motor.reverse(1);
 				break;
 		}
-		delay_1ms(10);
+		delay_ms(10);
 	}
 }
 
@@ -529,7 +544,7 @@ static void TASK16_Thread(void *arg) {
 		hmi.printf("t6.txt", "%.2lf", mpuData.angle_y / 10.0f);
 		hmi.printf("t7.txt", "%.2lf", mpuData.angle_z / 10.0f);
 		hmi.printf("t8.txt", "%.2lf", temp / 10.0f);
-		delay_1ms(10);
+		delay_ms(10);
 	}
 }
 
@@ -567,7 +582,7 @@ static void TASK17_Thread(void *arg) {
 	for ( ; ; ) {
 		key.read_all();
 		hmi.printf("t0.txt", "风扇转速：%d", fan_speed);
-		delay_1ms(20);
+		delay_ms(20);
 	}
 }
 
@@ -581,7 +596,7 @@ static void TASK18_Thread(void *arg) {
 	infrared_distance.init();
 	for ( ; ; ) {
 		hmi.printf("t0.txt", "酒精值为：%.2lf", infrared_distance.get_distance());
-		delay_1ms(500);
+		delay_ms(500);
 	}
 }
 
@@ -607,7 +622,7 @@ static void TASK19_Thread(void *arg) {
 			beep.control(0);
 			rgb_led.set_color(COLOR_OFF);
 		}
-		delay_1ms(10);
+		delay_ms(10);
 	}
 }
 
@@ -631,7 +646,7 @@ static void TASK20_Thread(void *arg) {
 			if (flag == 1) continue;
 			for (int i = 0; i <= 100; i++) {
 				rgb_led.set_pwm_timer(COLOR_PURPLE, i, LED_DEFAULT_FREQ);
-				delay_1ms(20);
+				delay_ms(20);
 			}
 			flag = 1;
 		}
@@ -639,11 +654,11 @@ static void TASK20_Thread(void *arg) {
 			if (flag == 0) continue;
 			for (int i = 100; i >= 0; i--) {
 				rgb_led.set_pwm_timer(COLOR_PURPLE, i, LED_DEFAULT_FREQ);
-				delay_1ms(20);
+				delay_ms(20);
 			}
 			flag = 0;
 		} 
-		delay_1ms(20);
+		delay_ms(20);
 	}
 }
 
@@ -656,7 +671,7 @@ static void task20_releases(void) {
 /* 模板START
 static void TASKxx_Thread(void *arg) {
 	for ( ; ; ) {
-		delay_1ms(1000);
+		delay_ms(1000);
 	}
 }
 

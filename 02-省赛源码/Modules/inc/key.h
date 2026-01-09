@@ -5,7 +5,7 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
-#include "systick.h"
+#include "delay.h"
 
 #define KEY_1_RTC RCU_GPIOE
 #define KEY_1_GPIO_Port GPIOE

@@ -1,6 +1,6 @@
 #include "hmc5883l.h"
 #include "iic.h"
-#include "systick.h"
+#include "delay.h"
 #include "math.h"
 
 // IIC 配置结构体
@@ -65,7 +65,7 @@ double HCM5883L_Get_Angle(void)
 {
     int16_t X_HM, Y_HM;
     double Angle = 0;
-    delay_1ms(67);  // 等待数据准备 (根据 75Hz 输出速率)
+    delay_ms(67);  // 等待数据准备 (根据 75Hz 输出速率)
     HMC5883L_READ(&X_HM, &Y_HM);
 
     Angle = (atan2(Y_HM, X_HM) * (180 / 3.14159265) + 180);

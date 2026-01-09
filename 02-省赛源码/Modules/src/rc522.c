@@ -2,7 +2,7 @@
 #include "iic.h"
 #include "oled.h"
 #include "stdio.h"
-#include "systick.h"
+#include "delay.h"
 #include <string.h>
 
 //P21端口
@@ -18,6 +18,7 @@ rc522_i rc522 = {
     .init = InitRc522,
 		.read = RC522_Read,
 		.write = RC522_Write,
+		.port_name = "P21",
 };
 
 /**************************************************************
@@ -33,10 +34,10 @@ void InitRc522(void) {
   rc522_i2c_config.sda_port = GPIOA;
   rc522_i2c_config.sda_rtc = RCU_GPIOA;
   IIC_Init(&rc522_i2c_config);
-  delay_1ms(100);
+  delay_ms(100);
   PcdReset();
   PcdAntennaOff();
-  delay_1ms(2);
+  delay_ms(2);
   PcdAntennaOn();
   M500PcdConfigISOType('A');
 }
@@ -44,7 +45,7 @@ void InitRc522(void) {
 void Reset_RC522(void) {
   PcdReset();
   PcdAntennaOff();
-  delay_1ms(2);
+  delay_ms(2);
   PcdAntennaOn();
 }
 /**************************************************************
@@ -295,10 +296,10 @@ void CalulateCRC(uint8_t *pIn, uint8_t len, uint8_t *pOut) {
  **************************************************************/
 char PcdReset(void) {
 
-  delay_1us(10);
+  delay_us(10);
   WriteRawRC(CommandReg, PCD_RESETPHASE);
   WriteRawRC(CommandReg, PCD_RESETPHASE);
-  delay_1us(10);
+  delay_us(10);
 
   // 和Mifare卡通讯，CRC初始值0x6363
   WriteRawRC(ModeReg, 0x3D);
@@ -330,7 +331,7 @@ char M500PcdConfigISOType(uint8_t type) {
     WriteRawRC(TReloadRegH, 0);
     WriteRawRC(TModeReg, 0x8D);
     WriteRawRC(TPrescalerReg, 0x3E);
-    delay_1us(1000);
+    delay_us(1000);
     PcdAntennaOn();
   } else {
     return 1;
@@ -556,15 +557,14 @@ void WaitCardOff(void) {
         }
       }
     }
-    delay_1ms(10);
+    delay_ms(10);
   }
 }
 
+uint16_t read_count = 0;
+uint16_t write_count = 0;
 
-//RC522读取数据 
-// sector 扇区
-// block 块
-// data 读取的数据
+// RC522读取数据
 uint8_t RC522_Read(unsigned char sector, unsigned char block, char* data) {
     if (rc522.log == NULL) {
         LOG_E("RC522_LOG is NULL");
@@ -573,34 +573,41 @@ uint8_t RC522_Read(unsigned char sector, unsigned char block, char* data) {
 
     unsigned char status;
     unsigned char blockAddress = sector * 4 + block;
-    unsigned char keyAddress = sector * 4 + 3;
+    unsigned char keyAddress   = sector * 4 + 3;
 
     status = PcdRequest(PICC_REQALL, CT); // 检测卡片
     if (status != MI_OK) {
-        rc522.log("Card detection failed");
+        read_count++;
+        rc522.log("Card detection failed (read_fail_count=%u)", (unsigned)read_count);
         return 0;
     }
 
     // 防冲突
     vTaskDelay(pdMS_TO_TICKS(200));
     rc522.log("Card detected successfully");
+
     status = PcdAnticoll(SN);
     if (status != MI_OK) {
-        rc522.log("Anti-collision failed");
+        read_count++;
+        rc522.log("Anti-collision failed (read_fail_count=%u)", (unsigned)read_count);
         return 0;
     }
 
     rc522.log("Anti-collision successful");
+
     status = PcdSelect(SN); // 选中卡片
     if (status != MI_OK) {
-        rc522.log("Card selection failed");
+        read_count++;
+        rc522.log("Card selection failed (read_fail_count=%u)", (unsigned)read_count);
         return 0;
     }
 
     rc522.log("Card selected successfully");
+
     status = PcdAuthState(0x60, keyAddress, KEY, SN); // 鉴权
     if (status != MI_OK) {
-        rc522.log("Authentication failed");
+        read_count++;
+        rc522.log("Authentication failed (read_fail_count=%u)", (unsigned)read_count);
         return 0;
     }
 
@@ -608,15 +615,18 @@ uint8_t RC522_Read(unsigned char sector, unsigned char block, char* data) {
 
     status = PcdRead(blockAddress, READ_RFID);
     if (status != MI_OK) {
-        rc522.log("Read failed");
+        read_count++;
+        rc522.log("Read failed (read_fail_count=%u)", (unsigned)read_count);
         return 0;
     }
 
     rc522.log("Read successful. Data: %s", READ_RFID);
+
     if (data != NULL) {
-        strncpy(data, (const char *)READ_RFID, 16); // 拷贝数据
+        strncpy(data, (const char *)READ_RFID, 16);
         data[15] = '\0';
     }
+
     if (rc522.read_success != NULL) {
         rc522.read_success(READ_RFID);
     }
@@ -624,10 +634,6 @@ uint8_t RC522_Read(unsigned char sector, unsigned char block, char* data) {
     return 1;
 }
 
-//RC522写入数据 
-// sector 扇区
-// block 块
-// data 写入的数据
 uint8_t RC522_Write(unsigned char sector, unsigned char block, const char* data, ...) {
     if (rc522.log == NULL) {
         LOG_E("RC522_LOG is NULL");
@@ -635,40 +641,48 @@ uint8_t RC522_Write(unsigned char sector, unsigned char block, const char* data,
     }
 
     if (data == NULL) {
-        rc522.log("Data buffer is NULL");
+        write_count++;
+        rc522.log("Data buffer is NULL (write_fail_count=%u)", (unsigned)write_count);
         return 0;
     }
 
     unsigned char status;
     unsigned char blockAddress = sector * 4 + block;
-    unsigned char keyAddress = sector * 4 + 3;
+    unsigned char keyAddress   = sector * 4 + 3;
 
     status = PcdRequest(PICC_REQALL, CT); // 检测卡片
     if (status != MI_OK) {
-        rc522.log("Card detection failed");
+        write_count++;
+        rc522.log("Card detection failed (write_fail_count=%u)", (unsigned)write_count);
         return 0;
     }
 
     // 防冲突
     vTaskDelay(pdMS_TO_TICKS(200));
     rc522.log("Card detected successfully");
+
     status = PcdAnticoll(SN);
     if (status != MI_OK) {
-        rc522.log("Anti-collision failed");
+        write_count++;
+        rc522.log("Anti-collision failed (write_fail_count=%u)", (unsigned)write_count);
         return 0;
     }
 
     rc522.log("Anti-collision successful");
+
     status = PcdSelect(SN); // 选中卡片
     if (status != MI_OK) {
-        rc522.log("Card selection failed");
+        write_count++;
+        rc522.log("Card selection failed (write_fail_count=%u)", (unsigned)write_count);
         return 0;
     }
 
     rc522.log("Card selected successfully");
+
     status = PcdAuthState(0x60, keyAddress, KEY, SN); // 鉴权
     if (status != MI_OK) {
-        rc522.log("Authentication failed");
+        write_count++;
+        rc522.log("Authentication failed (write_fail_count=%u)", (unsigned)write_count);
         return 0;
     }
 
@@ -679,13 +693,15 @@ uint8_t RC522_Write(unsigned char sector, unsigned char block, const char* data,
     va_end(args);
 
     if (len < 0 || len >= DATA_LEN) {
-        rc522.log("Formatted data is too long or invalid");
+        write_count++;
+        rc522.log("Formatted data is too long or invalid (write_fail_count=%u)", (unsigned)write_count);
         return 0;
     }
 
     status = PcdWrite(blockAddress, (uint8_t*)formattedData); // 写入数据
     if (status != MI_OK) {
-        rc522.log("Write failed");
+        write_count++;
+        rc522.log("Write failed (write_fail_count=%u)", (unsigned)write_count);
         return 0;
     }
 

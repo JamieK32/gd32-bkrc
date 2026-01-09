@@ -160,6 +160,7 @@ typedef struct rc522_i
 	void (*init)(void);
 	uint8_t (*read)(unsigned char, unsigned char, char *);
 	uint8_t (*write)(unsigned char, unsigned char, const char *, ...);
+	const char port_name[4];
 } rc522_i;
 
 extern rc522_i rc522;

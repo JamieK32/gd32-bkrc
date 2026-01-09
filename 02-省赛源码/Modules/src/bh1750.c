@@ -1,7 +1,7 @@
 #include "bh1750.h"
 #include "iic.h"
 #include "oled.h"
-#include "systick.h"
+#include "delay.h"
 
 //连接P20端口
 
@@ -31,7 +31,7 @@ static inline void Cmd_Write_BH1750(uint8_t cmd)
 	while (IIC_Wait_Ack(&bh1750_i2c_init_struct));
 	
 	IIC_Stop(&bh1750_i2c_init_struct);
-	delay_1ms(10);
+	delay_ms(10);
 }
 
 static inline void Start_BH1750(void)
@@ -49,7 +49,7 @@ static void Read_BH1750(void)
 	BUF[0] = IIC_Read_Byte(&bh1750_i2c_init_struct, 1);
 	BUF[1] = IIC_Read_Byte(&bh1750_i2c_init_struct, 0);
 	IIC_Stop(&bh1750_i2c_init_struct);
-	delay_1ms(10);
+	delay_ms(10);
 }
 
 static void Convert_BH1750(void)
@@ -63,7 +63,7 @@ static void BH1750_Test(void)
 {
 	uint8_t display[20];
 	Start_BH1750();
-	delay_1ms(400);
+	delay_ms(400);
 	Read_BH1750();
 	Convert_BH1750();
 	sprintf((char *)display, "%5d Lux", Lx_value); // floatתstring
@@ -72,7 +72,7 @@ static void BH1750_Test(void)
 
 static void BH1750_Read(void) {
 	Start_BH1750();
-	delay_1ms(300);
+	delay_ms(300);
 	Read_BH1750();
 	Convert_BH1750();
 }
@@ -89,4 +89,5 @@ bh1750_i bh1750 = {
 	.test = BH1750_Test,
 	.read = BH1750_Read,
 	.get = BH1750_Get_Lx,
+	.port_name = "P20",
 };

@@ -1,7 +1,7 @@
 #ifndef __SMG_H_
 #define __SMG_H_
 #include "gd32f4xx.h"
-#include "systick.h"
+#include "delay.h"
 
 #define SMG_SEG1_RTC 		RCU_GPIOA
 #define SMG_SEG1_GPIO_Port	GPIOA

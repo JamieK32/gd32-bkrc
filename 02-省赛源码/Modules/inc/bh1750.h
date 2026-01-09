@@ -14,6 +14,7 @@ typedef struct bh1750_i {
   uint16_t (*get)(void);
   void (*test)(void);
 	void (*read)(void);
+	const char port_name[6];
 } bh1750_i;
 
 extern bh1750_i bh1750;

@@ -3,6 +3,7 @@
 #include "oledfont.h"
 #include "stdio.h"
 #include "stdarg.h"
+#include "delay.h"
 
 IIC_Config oled_i2c_init_struct;
 
@@ -65,7 +66,7 @@ static void OLED_DrawBMP(unsigned char x0, unsigned char y0, unsigned char x1,
 static void OLED_Init(void) {
   OLED_Hardware_Init();
 
-  delay_1ms(100);
+  delay_ms(100);
 
   OLED_WR_Byte(0xAE, IIC_OLED_CMD); //--turn off oled panel
   OLED_WR_Byte(0x00, IIC_OLED_CMD); //---set low column address

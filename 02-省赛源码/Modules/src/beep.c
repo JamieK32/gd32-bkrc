@@ -1,7 +1,7 @@
 #include "beep.h"
 #include "freertos.h"
 #include "task.h"
-#include "systick.h"
+#include "delay.h"
 
 beep_i beep = {
 		.state = 0,
@@ -44,9 +44,9 @@ static void Play_Sound(uint16_t frq)
 	if(frq != 0) {
 		time = 500000 / ((uint32_t)frq);		//频率的倒数即是时间，然后此处计算的是T/2的时间，所以为500000
 		BEEP_Control(1);
-		delay_1us(time);
+		delay_us(time);
 		BEEP_Control(0);
-		delay_1us(time);
+		delay_us(time);
 	} else {
 			vTaskDelay(pdMS_TO_TICKS(1));
 		}
@@ -67,9 +67,9 @@ void Play_Db(uint16_t db) {
     uint32_t timeout_ticks = 800;                // 超时时间，单位为tick
 
     while (1) {
-        delay_1us(db);  // 延迟 db 微秒
+        delay_us(db);  // 延迟 db 微秒
         gpio_bit_write(BEEP_GPIO_Port, BEEP_Pin, SET);  // 打开蜂鸣器
-        delay_1us(db);  // 再次延迟 db 微秒
+        delay_us(db);  // 再次延迟 db 微秒
         gpio_bit_write(BEEP_GPIO_Port, BEEP_Pin, RESET);  // 关闭蜂鸣器
 
         // 检查是否超时

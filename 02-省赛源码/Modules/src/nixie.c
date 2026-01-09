@@ -73,15 +73,15 @@ void LED595SendData(uint8_t OutData)
 
         // Pulse the SCK to shift data
         LED595_SCK_RESET;
-        delay_1us(1);
-        delay_1us(1);
+        delay_us(1);
+        delay_us(1);
         LED595_SCK_SET;
     }
 
     // Latch the shifted data into the output register
     LED595_RCK_RESET;
-    delay_1us(1);
-    delay_1us(1);
+    delay_us(1);
+    delay_us(1);
     LED595_RCK_SET;
 }
 
@@ -90,11 +90,11 @@ void Nixie_Select_One(uint8_t num) {
 	if (num == 1) {
 			SEG1_SET;
 			SEG2_RESET;
-			delay_1ms(10);
+			delay_ms(10);
 	}	else if (num == 2) {
 			SEG1_RESET;
 			SEG2_SET;
-	   	delay_1ms(10);
+	   	delay_ms(10);
 	}
 }
 

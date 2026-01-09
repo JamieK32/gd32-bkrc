@@ -38,7 +38,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "c1016.h"
 #include "main.h"
 #include "speak.h"
-#include "systick.h"
+#include "delay.h"
 #include "timer.h"
 #include "usart.h"
 #include "ultrasonic.h"
@@ -377,37 +377,10 @@ void USART5_IRQHandler(void) {
 
 
 
-// 定时器中断处理函数
-void TIMER3_IRQHandler(void) {
-    if (timer_interrupt_flag_get(TIMER3, TIMER_INT_UP) == SET) {
-        global_count++; // 计数器递增
-        timer_interrupt_flag_clear(TIMER3, TIMER_INT_UP);
-
-#ifndef USE_BLOCKING_DELAY_US
-        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        uint8_t active_tasks = 0; // 用于判断是否还有活跃任务
-
-        // 检查所有延时任务
-        for (int i = 0; i < MAX_DELAY_US_TASKS; i++) {
-            if (delay_tasks[i].active) {
-                // 检查是否到达目标时间，考虑溢出情况
-                if (global_count >= delay_tasks[i].target_time) {
-                    vTaskNotifyGiveFromISR(delay_tasks[i].task_handle, &xHigherPriorityTaskWoken);
-                    delay_tasks[i].active = 0; // 标记任务完成
-                } else {
-                    active_tasks++; // 仍活跃的任务计数
-                }
-            }
-        }
-
-        // 如果没有活跃任务，关闭定时器
-        if (!active_tasks) {
-            timer_disable(TIMER3);
-            timer_is_running = 0;
-        }
-
-        // 如果有更高优先级任务被唤醒，触发调度
-        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-#endif
-    }
-}
+// 定时器中断处理函数 弃用
+//void TIMER3_IRQHandler(void) {
+//    if (timer_interrupt_flag_get(TIMER3, TIMER_INT_UP) == SET) {
+//        global_count++; // 计数器递增
+//        timer_interrupt_flag_clear(TIMER3, TIMER_INT_UP);
+//    }
+//}

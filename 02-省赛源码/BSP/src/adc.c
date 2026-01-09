@@ -1,5 +1,5 @@
 #include "adc.h"
-#include "systick.h"
+#include "delay.h"
 
 // 配置时钟
 static void rcu_config(const ADC_Config *config) {
@@ -27,7 +27,7 @@ static void adc_periph_config(const ADC_Config *config) {
     adc_external_trigger_config(config->adc_periph, ADC_REGULAR_CHANNEL, EXTERNAL_TRIGGER_DISABLE);
 
     adc_enable(config->adc_periph);  // 使能 ADC
-    delay_1ms(1U);                   // 等待稳定
+    delay_ms(1U);                   // 等待稳定
     adc_calibration_enable(config->adc_periph);  // 校准
 }
 

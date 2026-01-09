@@ -5,7 +5,7 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
-#include "systick.h"
+#include "delay.h"
 #include "oled.h"
 
 #define DQ_RTC 			RCU_GPIOC
@@ -25,7 +25,7 @@ typedef struct dht11_i {
 	uint16_t (*get_temperature)(void);
 	uint16_t (*get_humidity)(void);
 	void (*init)(void);
-	void (*read)(void);
+	void (*stop)(void);
 	void (*test)(void);
 } dht11_i;
 

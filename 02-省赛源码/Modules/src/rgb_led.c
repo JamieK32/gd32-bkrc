@@ -3,7 +3,7 @@
 #include "task.h"
 #include "timers.h"
 #include "stdbool.h"
-#include "systick.h"
+#include "delay.h"
 
 //连接P24端口
 
@@ -140,11 +140,11 @@ static void LED_Stop_TimerPwm(void) {
 static void LED_Breath(Color c) {
 	for (int i = 0; i <= 100; i++) {
 		rgb_led.set_pwm_timer(c, i, LED_DEFAULT_FREQ);
-		delay_1ms(15);
+		delay_ms(15);
 	}
 	for (int i = 100; i >= 0; i--) {
 		rgb_led.set_pwm_timer(c, i, LED_DEFAULT_FREQ);
-		delay_1ms(15);
+		delay_ms(15);
 	}
 }
 

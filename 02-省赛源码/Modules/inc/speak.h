@@ -5,7 +5,7 @@
 #include "gd32f4xx_it.h"
 #include "led.h"
 #include "oled.h"
-#include "systick.h"
+#include "delay.h"
 #include "usart.h"
 
 extern volatile uint8_t voiceFlag;

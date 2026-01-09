@@ -2,16 +2,23 @@
 
 // 连接P10端口
 
-uint16_t temperature, humidity;
+// DHT11 周期读取任务配置
+#define DHT11_PERIOD_MS     1000
+#define DHT11_TASK_PRIO     (tskIDLE_PRIORITY + 1)   // 低优先级
+#define DHT11_TASK_STACK    256                      // 视工程情况调整
 
+
+static uint16_t temperature, humidity;
+static volatile uint8_t  dht11_valid = 0;
+static volatile uint32_t dht11_last_update_ms = 0;
+static volatile uint8_t dht11_task_stop = 0;
+
+static TaskHandle_t dht11_task_handle = NULL;
+
+static void DHT11_Task(void *arg);
 
 void dht11_delay_us(uint32_t us) {
-    taskDISABLE_INTERRUPTS();  // 进入临界区，禁用中断
-    uint32_t i = us * 42;  // 粗略计算，需校准
-    while (i--) {
-        __NOP();  // 确保编译器不优化掉空循环
-    }
-    taskENABLE_INTERRUPTS();   // 退出临界区，恢复中断
+	delay_us(us);
 }
 
 /**************************************************************
@@ -22,7 +29,7 @@ void dht11_delay_us(uint32_t us) {
 static void DHT11_Rst(void) {
   DHT11_IO_OUT(); // SET OUTPUT
   DHT11_DQ_OUT_0; // 拉低DQ
-  delay_1ms(20);  // 拉低至少18ms
+  delay_ms(20);  // 拉低至少18ms
   DHT11_DQ_OUT_1; // DQ=1
   dht11_delay_us(40);  // 主机拉高20~40us
 }
@@ -141,15 +148,16 @@ static void DHT11_Hardware_Init(void) {
                           DQ_Pin);
 }
 
-static void DHT11_Software_Init(void) {
-  DHT11_Rst(); // 复位DHT11
-  while (DHT11_Check())
-    ; // 返回1:不存在；返回0:存在
-}
-
 static void DHT11_Init(void) {
   DHT11_Hardware_Init();
-  DHT11_Software_Init();
+	if (dht11_task_handle == NULL) {
+			xTaskCreate(DHT11_Task,
+									"dht11",
+									DHT11_TASK_STACK,
+									NULL,
+									DHT11_TASK_PRIO,
+									&dht11_task_handle);
+	}
 }
 
 static void DHT11_Test(void) {
@@ -160,24 +168,79 @@ static void DHT11_Test(void) {
   oled.show_int32_num(100, 3, humidity, 3, 16);
 }
 
+static void DHT11_Task(void *arg)
+{
+    (void)arg;
+
+    // 传感器上电后建议等一会儿（可选）
+    vTaskDelay(pdMS_TO_TICKS(200));
+
+    // 软件初始化放到任务里做：避免 scheduler 未启动时调用 vTaskDelay 出错
+    DHT11_Rst();
+    while (DHT11_Check()) {
+        vTaskDelay(pdMS_TO_TICKS(200));
+        DHT11_Rst();
+    }
+
+    TickType_t last = xTaskGetTickCount();
+
+    for (;;)
+    {
+		    if (dht11_task_stop) {
+						break;
+				}
+        uint16_t t = 0, h = 0;
+        uint8_t ret = DHT11_Read_Data(&t, &h);
+
+        taskENTER_CRITICAL();
+        if (ret == 0) {
+            temperature = t;
+            humidity = h;
+            dht11_valid = 1;
+            dht11_last_update_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+        } else {
+            dht11_valid = 0; // 或者保留旧值，只标记无效
+        }
+        taskEXIT_CRITICAL();
+
+        vTaskDelayUntil(&last, pdMS_TO_TICKS(DHT11_PERIOD_MS));
+    }
+		// 任务自己销毁（最干净）
+		taskENTER_CRITICAL();
+		dht11_task_handle = NULL;
+		taskEXIT_CRITICAL();
+		vTaskDelete(NULL);
+}
+
+
 static uint16_t DHT11_GetTemperature(void) {
-	delay_1ms(1);
-	return temperature;
+    uint16_t t;
+    taskENTER_CRITICAL();
+    t = temperature;
+    taskEXIT_CRITICAL();
+    return t;
 }
 
 static uint16_t DHT11_GetHumidity(void) {
-	delay_1ms(1);
-	return humidity;
+    uint16_t h;
+    taskENTER_CRITICAL();
+    h = humidity;
+    taskEXIT_CRITICAL();
+    return h;
 }
+
+void DHT11_StopTask(void)
+{
+    taskENTER_CRITICAL();
+    dht11_task_stop = 1;
+    taskEXIT_CRITICAL();
+}
+
 
 dht11_i dht11 = {
     .init = DHT11_Init,
-    .read = DHT11_Update,
+    .stop = DHT11_StopTask,
     .test = DHT11_Test,
 		.get_temperature = DHT11_GetTemperature,
 		.get_humidity = DHT11_GetHumidity,
 };
-
-static void DHT11_Update(void) {
-  DHT11_Read_Data(&temperature, &humidity);
-}

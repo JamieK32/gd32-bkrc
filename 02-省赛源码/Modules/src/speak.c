@@ -91,17 +91,17 @@ static void VoiceAnnouncementDigit(int digit) {
     #if defined(NEW_XIAO_CHUANG)
     Buffer[2] = map[thousands][1];
     USART_Send_Buff(&speakUsartConfig, Buffer, 4);
-    delay_1ms(time);
+    delay_ms(time);
     Buffer[2] = map[12][1]; // 播报 "千"
     USART_Send_Buff(&speakUsartConfig, Buffer, 4);
     #elif defined(OLD_XIAO_CHUANG)
     Buffer[0] = map[thousands][1];
     USART_Send_Buff(&speakUsartConfig, Buffer, 1);
-    delay_1ms(time);
+    delay_ms(time);
     Buffer[0] = map[12][1]; // 播报 "千"
     USART_Send_Buff(&speakUsartConfig, Buffer, 1);
     #endif
-    delay_1ms(time);
+    delay_ms(time);
     digit %= 1000;
   }
 
@@ -110,17 +110,17 @@ static void VoiceAnnouncementDigit(int digit) {
     #if defined(NEW_XIAO_CHUANG)
     Buffer[2] = map[hundreds][1];
     USART_Send_Buff(&speakUsartConfig, Buffer, 4);
-    delay_1ms(time);
+    delay_ms(time);
     Buffer[2] = map[11][1]; // 播报 "百"
     USART_Send_Buff(&speakUsartConfig, Buffer, 4);
     #elif defined(OLD_XIAO_CHUANG)
     Buffer[0] = map[hundreds][1];
     USART_Send_Buff(&speakUsartConfig, Buffer, 1);
-    delay_1ms(time);
+    delay_ms(time);
     Buffer[0] = map[11][1]; // 播报 "百"
     USART_Send_Buff(&speakUsartConfig, Buffer, 1);
     #endif
-    delay_1ms(time);
+    delay_ms(time);
     digit %= 100;
   }
 
@@ -129,17 +129,17 @@ static void VoiceAnnouncementDigit(int digit) {
     #if defined(NEW_XIAO_CHUANG)
     Buffer[2] = map[tens][1];
     USART_Send_Buff(&speakUsartConfig, Buffer, 4);
-    delay_1ms(time);
+    delay_ms(time);
     Buffer[2] = map[10][1]; // 播报 "十"
     USART_Send_Buff(&speakUsartConfig, Buffer, 4);
     #elif defined(OLD_XIAO_CHUANG)
     Buffer[0] = map[tens][1];
     USART_Send_Buff(&speakUsartConfig, Buffer, 1);
-    delay_1ms(time);
+    delay_ms(time);
     Buffer[0] = map[10][1]; // 播报 "十"
     USART_Send_Buff(&speakUsartConfig, Buffer, 1);
     #endif
-    delay_1ms(time);
+    delay_ms(time);
     digit %= 10;
   }
 
@@ -151,6 +151,6 @@ static void VoiceAnnouncementDigit(int digit) {
     Buffer[0] = map[digit][1];
     USART_Send_Buff(&speakUsartConfig, Buffer, 1);
     #endif
-    delay_1ms(time);
+    delay_ms(time);
   }
 }

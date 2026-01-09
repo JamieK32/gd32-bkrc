@@ -4,7 +4,7 @@
 #include "gd32f4xx.h"
 #include "string.h"
 #include "stdio.h"
-#include "systick.h"
+#include "delay.h"
 #include "timer.h"
 #include "exti.h"
 #include "oled.h"

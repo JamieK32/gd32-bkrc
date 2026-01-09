@@ -2,7 +2,7 @@
 #define __STEP_H_
 
 #include "gd32f4xx.h"
-#include "systick.h"
+#include "delay.h"
 
 #define STEP_A_RTC RCU_GPIOB
 #define STEP_A_GPIO_Port GPIOB

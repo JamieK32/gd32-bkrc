@@ -396,11 +396,6 @@
               <FilePath>..\USER\main.c</FilePath>
             </File>
             <File>
-              <FileName>systick.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\USER\systick.c</FilePath>
-            </File>
-            <File>
               <FileName>task_manager.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\USER\task_manager.c</FilePath>
@@ -444,6 +439,11 @@
               <FileName>adc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\BSP\src\adc.c</FilePath>
+            </File>
+            <File>
+              <FileName>delay.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\BSP\src\delay.c</FilePath>
             </File>
           </Files>
         </Group>

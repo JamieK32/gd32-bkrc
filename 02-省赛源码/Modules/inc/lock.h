@@ -3,7 +3,7 @@
 
 
 #include "oled.h"
-#include "systick.h"
+#include "delay.h"
 #include "gd32f4xx.h"
 
 #define LOCK_RTC 		RCU_GPIOD

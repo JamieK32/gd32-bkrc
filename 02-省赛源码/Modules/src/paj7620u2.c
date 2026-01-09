@@ -7,6 +7,8 @@
 
 #include "paj7620u2.h"
 #include "paj7620u2_cfg.h"
+#include "main.h"
+#include "delay.h"
 
 paj7620_t paj7620 = {
     .init = PAJ7620_Init,
@@ -124,9 +126,9 @@ unsigned char paj7620u2_wakeup(void)
 {
     unsigned char data = 0x0a;
     I2C_WakeUp(&PAJ7620_I2c_Cfg);                 // 唤醒PAJ7620U2
-    delay_1ms(5);                                 // 唤醒时间>400us
+    delay_ms(5);                                 // 唤醒时间>400us
     I2C_WakeUp(&PAJ7620_I2c_Cfg);                 // 唤醒PAJ7620U2
-    delay_1ms(5);                                 // 唤醒时间>400us
+    delay_ms(5);                                 // 唤醒时间>400us
     paj7620u2_selectBank(BANK0);                 // 进入BANK0寄存器区域
     data = I2C_Read_Byte(&PAJ7620_I2c_Cfg, 0x00); // 读取状态
     if (data != 0x20)

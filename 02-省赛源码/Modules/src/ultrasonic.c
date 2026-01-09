@@ -35,9 +35,9 @@ void Ultrasonic_Init(void)
 // 提取公共部分，发送超声波信号
 void Ultrasonic_Send_Pulse(void) {
     gpio_bit_set(Ultrasonic_IN_GPIO_Port, Ultrasonic_IN_Pin);
-    delay_1us(10);    
+    delay_us(10);    
     gpio_bit_reset(Ultrasonic_IN_GPIO_Port, Ultrasonic_IN_Pin);
-    delay_1us(10);        
+    delay_us(10);        
 }
 
 // 计算并返回距离值
@@ -51,7 +51,7 @@ float Ultrasonic_Get_Cm(void) {
     
     Ultrasonic_Send_Pulse();  // 发送超声波脉冲
     
-    delay_1ms(20);  // 延时等待超声波反射时间
+    delay_ms(20);  // 延时等待超声波反射时间
     
     show_time++;  // 增加计时器
     show_distance += dis_temp;  // 累加距离
@@ -75,7 +75,7 @@ void Ultrasonic_Test(void) {
     
     Ultrasonic_Send_Pulse();  // 发送超声波脉冲
     
-    delay_1ms(20);  // 延时等待超声波反射时间
+    delay_ms(20);  // 延时等待超声波反射时间
     
     show_time++;  // 增加计时器
     show_distance += dis_temp;  // 累加距离

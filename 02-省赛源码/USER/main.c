@@ -33,9 +33,7 @@ void UartProcessTask(void *pvParameters) {
 }
 
 void hardware_init(void) {
-	systick_config();
-  // 微秒级别延时需要初始化定时器3
-  TIMER3_init(168 - 1, 1 - 1);
+	systick_clksource_set(SYSTICK_CLKSOURCE_HCLK_DIV8);
 	//初始化系统串口用来充当调试串口
 	USART_Init(&systemUsartConfig);
 	//整个系统设计基于串口屏，因此在使用系统前先会调用初始化串口屏

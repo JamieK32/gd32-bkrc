@@ -41,7 +41,7 @@ void HC595_Init(void)
 	RCLK_L;
 	SCLK_L;
 	SER_L;
-	delay_1ms(500);
+	delay_ms(500);
 }
 
 
@@ -58,15 +58,15 @@ void HC595_Send_16Bit(uint16_t data)
 		{
 			SER_L;  
 		}
-		delay_1us(10);
+		delay_us(10);
 		SCLK_L; 
-		delay_1us(10);
+		delay_us(10);
 		SCLK_H; 	              
-		delay_1us(10);
+		delay_us(10);
 		data <<=1;
  	} 
 	RCLK_L;         
-	delay_1us(10);            
+	delay_us(10);            
 	RCLK_H;
 }
 
@@ -93,7 +93,7 @@ void Matrix_Display_Static(uint8_t* data)
 		dat = HC595_Dat_Handle(*(data+i),col_data[i]);
 		HC595_Send_16Bit(dat);
 	}
-	delay_1ms(1);
+	delay_ms(1);
 	}	
 }
 
@@ -118,7 +118,7 @@ void Matrix_Display_Scroll(uint8_t *data, uint16_t len, uint8_t direction) {
 					if (j - i >= 0) dat = HC595_Dat_Handle(row_data[i], *(data - i + j));
 				}
 				HC595_Send_16Bit(dat);
-				delay_1ms(1);
+				delay_ms(1);
 			}
 		}
 	}
@@ -234,7 +234,7 @@ void Matrix_Display_CountDown_99_Blocking(void) {
 void Matrix_Display_Img(uint8_t *data) {
 	while (1) {
 		Matrix_Display_Static(data + matrix.img_data_index);
-		delay_1ms(1);
+		delay_ms(1);
 	}
 }
 
@@ -243,5 +243,5 @@ void Matrix_Display_Clear(void) {
     for (i = 0; i < 8; i++) {
         HC595_Send_16Bit(HC595_Dat_Handle(0x00, col_data[i])); // 空数据对应的行列
     }
-    delay_1ms(1);
+    delay_ms(1);
 }

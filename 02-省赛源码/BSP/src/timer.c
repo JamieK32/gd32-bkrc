@@ -33,7 +33,7 @@ void TIMER1_init(uint16_t arr, uint16_t psc)
 }
 
 
-//系统微秒延时 TIMER
+//系统微秒延时 TIMER 弃用
 void TIMER3_init(uint16_t arr, uint16_t psc) {
   timer_parameter_struct timer_initpara;
 

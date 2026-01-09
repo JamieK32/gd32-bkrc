@@ -42,8 +42,8 @@ void set_step(uint8_t a, uint8_t b, uint8_t c, uint8_t d) {
 }
 
 void step_delay(void) { 
-	if (100 - speed) delay_1ms(100 - speed); 
-	else delay_1ms(1);
+	if (100 - speed) delay_ms(100 - speed); 
+	else delay_ms(1);
 }
 
 void step_motor_set_speed(uint8_t s) {

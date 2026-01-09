@@ -5,7 +5,7 @@
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
-#include "systick.h"
+#include "delay.h"
 #include "oled.h"
 
 #define FLAME_RTC 			RCU_GPIOC

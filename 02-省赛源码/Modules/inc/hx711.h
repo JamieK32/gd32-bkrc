@@ -6,7 +6,7 @@
 #include "stdlib.h"
 #include "string.h"
 #include "gd32f4xx_i2c.h"
-#include "systick.h"
+#include "delay.h"
 #include "oled.h"
 
 #define HX711_SCK_RTC RCU_GPIOC
