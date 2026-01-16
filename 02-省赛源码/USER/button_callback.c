@@ -121,20 +121,23 @@ static void task3_releases(void) {
 
 //超声波测距任务 START
 static void TASK4_Thread(void *arg) {
-	ultrasonic.init();
+	Ultrasonic_Init();
 	beep.init();
 	rgb_led.init();
+	hmi.printf("超声波任务已开始，请插入%s端口", ULTRASONIC_PORT_NAME);
+	delay_ms(1300);
 	for ( ; ; ) {
-		float val = ultrasonic.get_cm();
+		float val = Ultrasonic_Get_Cm();
 		hmi.printf("t0.txt", "超声波距离为：%.2lf", val);
 		if (val < 15) {
 			rgb_led.blink_control(COLOR_RED, 500);
+			beep.control(1);
 		} else if (val >= 15 && val <= 20) {
 			beep.control(0);
 			rgb_led.off();
 		}
 		else if (val > 20) {
-			rgb_led.blink_control(COLOR_GREEN, 500);
+			rgb_led.blink_control(COLOR_BLUE, 500);
 			beep.control(0);
 		}
 		delay_ms(10);
@@ -255,15 +258,6 @@ static void task7_releases(void) {
 }
 //滑块LED任务 END
 
-// RC522刷卡任务 START
-static void rc522_log_callback(const char *fmt, ...) {
-    char formattedData[256];
-    va_list args;
-    va_start(args, fmt);
-    int len = vsnprintf(formattedData, 256, fmt, args);
-    va_end(args);
-		hmi.send_string("t0.txt", formattedData);
-}
 
 static volatile uint8_t task8_running = 0;
 
@@ -273,7 +267,14 @@ static void task8_read_card(void *arg) {
 			return;
 	}
 	LOG_I("read");
-	rc522.read(3, 2, NULL);
+	char buf[17];
+	rc522_key_t keyA = { .keyByte = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF} };
+	rc522_status_t st = rc522_read_sector_block(&g_rc522, 1, 0, &keyA, buf);
+	if (st == RC522_OK) { 
+		hmi.printf("t0.txt", "读取成功 %s", buf);
+	} else {
+		hmi.send_string("t0.txt", "读取失败");
+	}
 }
 
 static void task8_write_card(void *arg) {
@@ -281,16 +282,21 @@ static void task8_write_card(void *arg) {
 			hmi.send_string("t0.txt", "TASK8未运行，禁止写卡");
 			return;
 	}
-	LOG_I("write");
-	rc522.write(10, 0, "KAUNG");
+	rc522_key_t keyA = { .keyByte = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF} };
+	char buf[] = "雷帝万岁";
+	rc522_status_t st = rc522_write_sector_block(&g_rc522, 1, 0, &keyA, buf);
+	if (st == RC522_OK) { 
+		hmi.printf("t0.txt", "写入成功 %s", buf);
+	} else {
+		hmi.send_string("t0.txt", "写入失败");
+	}
 }
 
 static void TASK8_Thread(void *arg) {
 	task8_running = 1;  // ✅ 标记任务已运行
-	rc522.init();
+	RC522_AppInit();
 	oled.init();
-	rc522.log = rc522_log_callback;
-	hmi.printf("t0.txt",  "任务已开始请插入%s端口", rc522.port_name);
+	hmi.printf("t0.txt",  "任务已开始请插入%s端口", RC522_PORT_NAME);
 	for ( ; ; ) {
 			delay_ms(1000);
 	}
@@ -298,7 +304,6 @@ static void TASK8_Thread(void *arg) {
 
 static void task8_releases(void) {
 	task8_running = 0;     // ✅ 标记任务已停止
-  rc522.log = NULL;      // 可选：避免停止后还打印/误用
 	for (int i = 0; i < 2; i++) hmi.send_string("t0.txt", "任务已停止");
 }
 //RC522刷卡任务 END
@@ -374,39 +379,40 @@ static void TASK11_Thread(void *arg) {
 
     for (;;) {
         // 获取当前时间
-        bh1750.read();
-        uint16_t val = bh1750.get();
-        hmi.printf("t7.txt", "当前光照强度为：%d LX", val);
-        RTC_Time current_time = rtc_get_time();
-        
-        // 更新时间历史数组
-        for (int i = TIME_HISTORY_SIZE - 1; i > 0; i--) {
-            time_history[i] = time_history[i - 1];
-        }
-        time_history[0] = current_time;
-        
-        // 发送光照数据到曲线
-        hmi.send_to_curve("s0", 0, val, 0, 600);
-        
-        // 获取当前tick计数
-        TickType_t current_ticks = xTaskGetTickCount();
-        
-        // 检查是否过了一秒
-        if ((current_ticks - last_update_ticks) >= ticks_per_second) {
-            // 显示时间到 HMI
-            for (int i = 0; i < TIME_HISTORY_SIZE; i++) {
-                hmi.printf(txts[i], "%02d:%02d", time_history[i].minute, time_history[i].second);
-            }
-            last_update_ticks = current_ticks; // 更新最后刷新时间
-        }
-        
+        bh1750.tick();
+				if (bh1750.is_ready()) {
+					uint16_t val = bh1750.get();
+					hmi.printf("t7.txt", "当前光照强度为：%d LX", val);
+					RTC_Time current_time = rtc_get_time();
+					
+					// 更新时间历史数组
+					for (int i = TIME_HISTORY_SIZE - 1; i > 0; i--) {
+							time_history[i] = time_history[i - 1];
+					}
+					time_history[0] = current_time;
+					
+					// 发送光照数据到曲线
+					hmi.send_to_curve("s0", 0, val, 0, 600);
+					
+					// 获取当前tick计数
+					TickType_t current_ticks = xTaskGetTickCount();
+					
+					// 检查是否过了一秒
+					if ((current_ticks - last_update_ticks) >= ticks_per_second) {
+							// 显示时间到 HMI
+							for (int i = 0; i < TIME_HISTORY_SIZE; i++) {
+									hmi.printf(txts[i], "%02d:%02d", time_history[i].minute, time_history[i].second);
+							}
+							last_update_ticks = current_ticks; // 更新最后刷新时间
+					}
+				}
         // FreeRTOS 延时
         vTaskDelay(pdMS_TO_TICKS(10)); // 10ms循环频率
     }
 }
 
 static void task11_releases(void) {
-	for (int i = 0; i < 2; i++) hmi.send_string("t0.txt", "任务已停止");
+	for (int i = 0; i < 2; i++) hmi.send_string("t0.txt", "光照任务已停止");
 }
 //光照曲线任务 END
 
@@ -489,13 +495,37 @@ static void task13_releases(void) {
 //舵机任务 END
 
 //点阵屏幕任务 START
+void task14_sub1(void *arg) {
+	Matrix_TimerState(MATRIX_COUNT_DOWN, 1, 0, 20);
+}
+
+void task14_sub2(void *arg) {
+	Matrix_ScrollState(arrow_left, 8, 1);
+}
+
+void task14_sub3(void *arg) {
+	Matrix_ScrollState(arrow_right, 8, 2);
+}
+
+void task14_sub4(void *arg) {
+	Matrix_ScrollState(arrow_up, 8, 3);
+}
+
+void task14_sub5(void *arg) {
+	Matrix_ScrollState(arrow_down, 8, 4);
+}
+
+
 static void TASK14_Thread(void *arg) {
-	matrix.init();
-	matrix.display_countdown_99();
+	Matrix_Init();
+	while (1) {
+		Matrix_Tick();
+		delay_ms(1);
+	}
 }
 
 static void task14_releases(void) {
-	matrix.clear();
+	Matrix_Clear();
 	for (int i = 0; i < 2; i++) hmi.send_string("t0.txt", "任务已停止");
 }
 //点阵屏任务 END
@@ -640,7 +670,7 @@ static void TASK20_Thread(void *arg) {
 	rgb_led.init();
 	bh1750.init();
 	for ( ; ; ) {
-		bh1750.read();
+		bh1750.tick();
 		uint16_t val = bh1750.get();
 		if (val < 100) {
 			if (flag == 1) continue;
@@ -707,7 +737,7 @@ TaskInfo taskTables[30] = {
 		{TASK11_Thread, task11_releases, "TASK11", 2, &taskHandlers[10], 0x1B, 0x1C, {NULL}, {0}}, // 光照曲线任务
 		{TASK12_Thread, task12_releases, "TASK12", 2, &taskHandlers[11], 0x1D, 0x1E, {NULL}, {0}}, // 矩阵键盘曲线任务
 		{TASK13_Thread, task13_releases, "TASK13", 2, &taskHandlers[12], 0x1F, 0x20, {NULL}, {0}}, // 舵机任务
-		{TASK14_Thread, task14_releases, "TASK14", 2, &taskHandlers[13], 0x21, 0x22, {NULL}, {0}}, // 点阵屏任务
+		{TASK14_Thread, task14_releases, "TASK14", 2, &taskHandlers[13], 0x21, 0x22, {task14_sub1, task14_sub2, task14_sub3, task14_sub4, task14_sub5}, {0x31, 0x32, 0x33, 0x34, 0x35}}, // 点阵屏任务
 		{TASK15_Thread, task15_releases, "TASK15", 2, &taskHandlers[14], 0x23, 0x24, {task15_corotation, task15_reversal}, {0x25, 0x26}}, // 步进电机任务
 		{TASK16_Thread, task16_releases, "TASK16", 2, &taskHandlers[15], 0x27, 0x28, {NULL}, {0}}, // 姿态传感器任务
 		{TASK17_Thread, task17_releases, "TASK17", 2, &taskHandlers[16], 0x29, 0x2A, {NULL}, {0}}, // 点阵屏任务

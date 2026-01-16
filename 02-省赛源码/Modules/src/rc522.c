@@ -1,710 +1,430 @@
 #include "rc522.h"
-#include "iic.h"
-#include "oled.h"
-#include "stdio.h"
-#include "delay.h"
 #include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
 
-//P21端口
+#define RC522_MAX_FRAME_LEN 64
 
-static unsigned char CT[2];//卡类型
-static unsigned char SN[4]; //卡号
-unsigned char READ_RFID[DATA_LEN+2]= {0};
-static unsigned char KEY[6]= {0xff,0xff,0xff,0xff,0xff,0xff};//密钥
-
-IIC_Config rc522_i2c_config;
-
-rc522_i rc522 = {
-    .init = InitRc522,
-		.read = RC522_Read,
-		.write = RC522_Write,
-		.port_name = "P21",
-};
-
-/**************************************************************
- *功  能：	RC522 芯片初始化
- *参  数: 	无
- *返回值: 	无
- **************************************************************/
-void InitRc522(void) {
-  rc522_i2c_config.scl_pin = GPIO_PIN_6;
-  rc522_i2c_config.scl_port = GPIOA;
-  rc522_i2c_config.scl_rtc = RCU_GPIOA;
-  rc522_i2c_config.sda_pin = GPIO_PIN_7 ;
-  rc522_i2c_config.sda_port = GPIOA;
-  rc522_i2c_config.sda_rtc = RCU_GPIOA;
-  IIC_Init(&rc522_i2c_config);
-  delay_ms(100);
-  PcdReset();
-  PcdAntennaOff();
-  delay_ms(2);
-  PcdAntennaOn();
-  M500PcdConfigISOType('A');
+//------------------ 内部工具 ------------------
+static void logf(rc522_t *d, const char *fmt, ...) {
+    if (!d || !d->log) return;
+    va_list ap;
+    va_start(ap, fmt);
+    d->log(d->user, fmt, ap); // ⚠️ 如果你 log 回调不支持 va_list，就把这个函数删掉，直接在外面 printf
+    va_end(ap);
 }
 
-void Reset_RC522(void) {
-  PcdReset();
-  PcdAntennaOff();
-  delay_ms(2);
-  PcdAntennaOn();
-}
-/**************************************************************
- *功  能：	寻卡
- *参  数: 	req_code[IN]:寻卡方式
- *		 	0x52 = 寻感应区内所有符合14443A标准的卡
- *		 	0x26 = 寻未进入休眠状态的卡
- *		 	pTagType[OUT]：卡片类型代码
- *		 	0x4400 = Mifare_UltraLight
- *		 	0x0400 = Mifare_One(S50)
- *		 	0x0200 = Mifare_One(S70)
- *		 	0x0800 = Mifare_Pro(X)
- *		 	0x4403 = Mifare_DESFire
- *返回值: 	成功返回MI_OK
- **************************************************************/
-char PcdRequest(uint8_t req_code, uint8_t *pTagType) {
-  char status;
-  uint8_t unLen;
-  uint8_t ucComMF522Buf[MAXRLEN];
+// 为了兼容“log(fmt,...)”这种回调，这里不强行用 va_list。
+// 你更推荐把 dev->log 定义成 printf 风格（你 demo 已经是这样），那就别用上面的 logf。
 
-  ClearBitMask(Status2Reg, 0x08);
-  WriteRawRC(BitFramingReg, 0x07);
-  SetBitMask(TxControlReg, 0x03);
-
-  ucComMF522Buf[0] = req_code;
-
-  status = PcdComMF522(PCD_TRANSCEIVE, ucComMF522Buf, 1, ucComMF522Buf, &unLen);
-
-  if ((status == MI_OK) && (unLen == 0x10)) {
-    *pTagType = ucComMF522Buf[0];
-    *(pTagType + 1) = ucComMF522Buf[1];
-  } else {
-    status = MI_ERR;
-  }
-
-  return status;
+static int check_dev(rc522_t *dev) {
+    return dev && dev->i2c_wr && dev->i2c_rd;
 }
 
-/**************************************************************
- *功  能：	防冲撞
- *参  数: 	pSnr[OUT]:卡片序列号，4字节
- *返回值: 	成功返回MI_OK
- **************************************************************/
-char PcdAnticoll(uint8_t *pSnr) {
-  char status;
-  uint8_t i, snr_check = 0;
-  uint8_t unLen;
-  uint8_t ucComMF522Buf[MAXRLEN];
+uint8_t rc522_read_reg(rc522_t *dev, uint8_t reg) {
+    uint8_t v = 0;
+    if (!check_dev(dev)) return 0;
+    dev->i2c_rd(dev->user, dev->dev_addr, reg, &v);
+    return v;
+}
 
-  ClearBitMask(Status2Reg, 0x08);
-  WriteRawRC(BitFramingReg, 0x00);
-  ClearBitMask(CollReg, 0x80);
+void rc522_write_reg(rc522_t *dev, uint8_t reg, uint8_t val) {
+    if (!check_dev(dev)) return;
+    dev->i2c_wr(dev->user, dev->dev_addr, reg, val);
+}
 
-  ucComMF522Buf[0] = PICC_ANTICOLL1;
-  ucComMF522Buf[1] = 0x20;
+void rc522_set_bit_mask(rc522_t *dev, uint8_t reg, uint8_t mask) {
+    uint8_t tmp = rc522_read_reg(dev, reg);
+    rc522_write_reg(dev, reg, (uint8_t)(tmp | mask));
+}
 
-  status = PcdComMF522(PCD_TRANSCEIVE, ucComMF522Buf, 2, ucComMF522Buf, &unLen);
+void rc522_clear_bit_mask(rc522_t *dev, uint8_t reg, uint8_t mask) {
+    uint8_t tmp = rc522_read_reg(dev, reg);
+    rc522_write_reg(dev, reg, (uint8_t)(tmp & (uint8_t)(~mask)));
+}
 
-  if (status == MI_OK) {
-    for (i = 0; i < 4; i++) {
-      *(pSnr + i) = ucComMF522Buf[i];
-      snr_check ^= ucComMF522Buf[i];
+//------------------ 核心：与 PICC 通信（等价 Arduino PCD_CommunicateWithPICC） ------------------
+static rc522_status_t rc522_transceive(
+    rc522_t *dev,
+    uint8_t command,
+    const uint8_t *sendData, uint8_t sendLen,
+    uint8_t *backData, uint8_t *backLenBytes,
+    uint8_t *validBits,    // in/out, last byte valid bits
+    uint8_t rxAlign,       // 0..7
+    int checkCrc
+) {
+    if (!check_dev(dev) || !sendData || sendLen == 0) return RC522_INVALID_ARG;
+
+    // BitFramingReg: RxAlign[6:4] + TxLastBits[2:0]
+    uint8_t txLastBits = validBits ? (*validBits) : 0;
+    uint8_t bitFraming = (uint8_t)((rxAlign << 4) | (txLastBits & 0x07));
+
+    // Stop any command, clear irq, flush fifo
+    rc522_write_reg(dev, RC522_Reg_Command, RC522_PCD_Idle);
+    rc522_write_reg(dev, RC522_Reg_ComIrq, 0x7F);
+    rc522_set_bit_mask(dev, RC522_Reg_FIFOLevel, 0x80);
+
+    // Write FIFO
+    for (uint8_t i = 0; i < sendLen; i++) {
+        rc522_write_reg(dev, RC522_Reg_FIFOData, sendData[i]);
     }
-    if (snr_check != ucComMF522Buf[i]) {
-      status = MI_ERR;
+    rc522_write_reg(dev, RC522_Reg_BitFraming, bitFraming);
+    rc522_write_reg(dev, RC522_Reg_Command, command);
+
+    if (command == RC522_PCD_Transceive) {
+        rc522_set_bit_mask(dev, RC522_Reg_BitFraming, 0x80); // StartSend
     }
-  }
 
-  SetBitMask(CollReg, 0x80);
-  return status;
-}
-
-/**************************************************************
- *功  能：	选定卡片
- *参  数: 	pSnr[IN]:卡片序列号，4字节
- *返回值: 	成功返回MI_OK
- **************************************************************/
-char PcdSelect(uint8_t *pSnr) {
-  char status;
-  uint8_t i;
-  uint8_t unLen;
-  uint8_t ucComMF522Buf[MAXRLEN];
-
-  ucComMF522Buf[0] = PICC_ANTICOLL1;
-  ucComMF522Buf[1] = 0x70;
-  ucComMF522Buf[6] = 0;
-  for (i = 0; i < 4; i++) {
-    ucComMF522Buf[i + 2] = *(pSnr + i);
-    ucComMF522Buf[6] ^= *(pSnr + i);
-  }
-  CalulateCRC(ucComMF522Buf, 7, &ucComMF522Buf[7]);
-
-  ClearBitMask(Status2Reg, 0x08);
-
-  status = PcdComMF522(PCD_TRANSCEIVE, ucComMF522Buf, 9, ucComMF522Buf, &unLen);
-
-  if ((status == MI_OK) && (unLen == 0x18)) {
-    status = MI_OK;
-  } else {
-    status = MI_ERR;
-  }
-
-  return status;
-}
-
-/**************************************************************
- *功  能：	验证卡片密码
- *参  数:	auth_mode[IN]: 密码验证模式 0x60 = 验证A密钥 0x61 = 验证B密钥
- *		 	addr[IN]：块地址   pKey[IN]：密码
- *pSnr[IN]：卡片序列号，4字节 返回值: 	成功返回MI_OK
- **************************************************************/
-char PcdAuthState(uint8_t auth_mode, uint8_t addr, uint8_t *pKey,
-                  uint8_t *pSnr) {
-  char status;
-  uint8_t unLen;
-  uint8_t ucComMF522Buf[MAXRLEN];
-
-  ucComMF522Buf[0] = auth_mode;
-  ucComMF522Buf[1] = addr;
-  //    for (i=0; i<6; i++)
-  //    {    ucComMF522Buf[i+2] = *(pKey+i);   }
-  //    for (i=0; i<6; i++)
-  //    {    ucComMF522Buf[i+8] = *(pSnr+i);   }
-  memcpy(&ucComMF522Buf[2], pKey, 6);
-  memcpy(&ucComMF522Buf[8], pSnr, 4);
-
-  status = PcdComMF522(PCD_AUTHENT, ucComMF522Buf, 12, ucComMF522Buf, &unLen);
-  if ((status != MI_OK) || (!(ReadRawRC(Status2Reg) & 0x08))) {
-    status = MI_ERR;
-  }
-
-  return status;
-}
-
-/**************************************************************
- *功  能：	读取M1卡一块数据
- *参  数: 	addr[IN]：块地址 pData[OUT]：读出的数据，16字节
- *返回值: 	成功返回MI_OK
- **************************************************************/
-char PcdRead(uint8_t addr, uint8_t *p) {
-  char status;
-  uint8_t unLen;
-  uint8_t i, ucComMF522Buf[MAXRLEN];
-
-  ucComMF522Buf[0] = PICC_READ;
-  ucComMF522Buf[1] = addr;
-  CalulateCRC(ucComMF522Buf, 2, &ucComMF522Buf[2]);
-
-  status = PcdComMF522(PCD_TRANSCEIVE, ucComMF522Buf, 4, ucComMF522Buf, &unLen);
-  if ((status == MI_OK) && (unLen == 0x90))
-  //   {   memcpy(p , ucComMF522Buf, 16);   }
-  {
-    for (i = 0; i < 16; i++) {
-      *(p + i) = ucComMF522Buf[i];
+    // Wait
+    // waitIRq: RxIRq + IdleIRq => 0x30
+    // timer irq bit => 0x01
+    const uint8_t waitIRq = 0x30;
+    uint16_t i = 2000;
+    while (1) {
+        uint8_t n = rc522_read_reg(dev, RC522_Reg_ComIrq);
+        if (n & waitIRq) break;
+        if (n & 0x01) return RC522_TIMEOUT;
+        if (--i == 0) return RC522_TIMEOUT;
     }
-  } else {
-    status = MI_ERR;
-  }
 
-  return status;
-}
+    // Check errors
+    uint8_t err = rc522_read_reg(dev, RC522_Reg_Error);
+    // BufferOvfl(0x10) ParityErr(0x02) ProtocolErr(0x01) => 0x13
+    if (err & 0x13) return RC522_ERR;
+    // Collision
+    if (err & 0x08) return RC522_COLLISION;
 
-/**************************************************************
- *功  能：	写数据到M1卡一块
- *参  数: 	addr[IN]：块地址  pData[IN]：写入的数据，16字节
- *返回值: 	成功返回MI_OK
- **************************************************************/
-char PcdWrite(uint8_t addr, uint8_t *p) {
-  char status;
-  uint8_t unLen;
-  uint8_t i, ucComMF522Buf[MAXRLEN];
+    // Read back
+    if (backData && backLenBytes) {
+        uint8_t n = rc522_read_reg(dev, RC522_Reg_FIFOLevel);
+        if (n > *backLenBytes) return RC522_NO_ROOM;
+        *backLenBytes = n;
 
-  ucComMF522Buf[0] = PICC_WRITE;
-  ucComMF522Buf[1] = addr;
-  CalulateCRC(ucComMF522Buf, 2, &ucComMF522Buf[2]);
-
-  status = PcdComMF522(PCD_TRANSCEIVE, ucComMF522Buf, 4, ucComMF522Buf, &unLen);
-
-  if ((status != MI_OK) || (unLen != 4) ||
-      ((ucComMF522Buf[0] & 0x0F) != 0x0A)) {
-    status = MI_ERR;
-  }
-
-  if (status == MI_OK) {
-    // memcpy(ucComMF522Buf, p , 16);
-    for (i = 0; i < 16; i++) {
-      ucComMF522Buf[i] = *(p + i);
-    }
-    CalulateCRC(ucComMF522Buf, 16, &ucComMF522Buf[16]);
-
-    status =
-        PcdComMF522(PCD_TRANSCEIVE, ucComMF522Buf, 18, ucComMF522Buf, &unLen);
-    if ((status != MI_OK) || (unLen != 4) ||
-        ((ucComMF522Buf[0] & 0x0F) != 0x0A)) {
-      status = MI_ERR;
-    }
-  }
-
-  return status;
-}
-
-/**************************************************************
- *功  能：	命令卡片进入休眠状态
- *参  数: 	无
- *返回值: 	成功返回MI_OK
- **************************************************************/
-char PcdHalt(void) {
-  uint8_t status;
-  uint8_t unLen;
-  uint8_t ucComMF522Buf[MAXRLEN];
-
-  ucComMF522Buf[0] = PICC_HALT;
-  ucComMF522Buf[1] = 0;
-  CalulateCRC(ucComMF522Buf, 2, &ucComMF522Buf[2]);
-
-  status = PcdComMF522(PCD_TRANSCEIVE, ucComMF522Buf, 4, ucComMF522Buf, &unLen);
-
-  return status;
-}
-
-/**************************************************************
- *功  能：	用MF522计算CRC16函数
- *参  数: 	无
- *返回值: 	无
- **************************************************************/
-void CalulateCRC(uint8_t *pIn, uint8_t len, uint8_t *pOut) {
-  uint8_t i, n;
-  ClearBitMask(DivIrqReg, 0x04);
-  WriteRawRC(CommandReg, PCD_IDLE);
-  SetBitMask(FIFOLevelReg, 0x80);
-  for (i = 0; i < len; i++) {
-    WriteRawRC(FIFODataReg, *(pIn + i));
-  }
-  WriteRawRC(CommandReg, PCD_CALCCRC);
-  i = 0xFF;
-  do {
-    n = ReadRawRC(DivIrqReg);
-    i--;
-  } while ((i != 0) && !(n & 0x04));
-  pOut[0] = ReadRawRC(CRCResultRegL);
-  pOut[1] = ReadRawRC(CRCResultRegM);
-}
-
-/**************************************************************
- *功  能：	复位RC522
- *参  数: 	无
- *返回值: 	成功返回MI_OK
- **************************************************************/
-char PcdReset(void) {
-
-  delay_us(10);
-  WriteRawRC(CommandReg, PCD_RESETPHASE);
-  WriteRawRC(CommandReg, PCD_RESETPHASE);
-  delay_us(10);
-
-  // 和Mifare卡通讯，CRC初始值0x6363
-  WriteRawRC(ModeReg, 0x3D);
-  WriteRawRC(TReloadRegL, 30);
-  WriteRawRC(TReloadRegH, 0);
-  WriteRawRC(TModeReg, 0x8D);
-  WriteRawRC(TPrescalerReg, 0x3E);
-
-  // 必须要
-  WriteRawRC(TxAutoReg, 0x40);
-
-  return MI_OK;
-}
-//////////////////////////////////////////////////////////////////////
-// 设置RC632的工作方式
-//////////////////////////////////////////////////////////////////////
-char M500PcdConfigISOType(uint8_t type) {
-  // ISO14443_A
-  if (type == 'A') {
-    ClearBitMask(Status2Reg, 0x08);
-    // 3F
-    WriteRawRC(ModeReg, 0x3D);
-    // 84
-    WriteRawRC(RxSelReg, 0x86);
-    // 4F
-    WriteRawRC(RFCfgReg, 0x7F);
-    // tmoLength);// TReloadVal = 'h6a =tmoLength(dec)
-    WriteRawRC(TReloadRegL, 30);
-    WriteRawRC(TReloadRegH, 0);
-    WriteRawRC(TModeReg, 0x8D);
-    WriteRawRC(TPrescalerReg, 0x3E);
-    delay_us(1000);
-    PcdAntennaOn();
-  } else {
-    return 1;
-  }
-
-  return MI_OK;
-}
-
-/**************************************************************
- *功  能：	置RC522寄存器位
- *参  数: 	reg[IN]:寄存器地址  mask[IN]:置位值
- *返回值: 	无
- **************************************************************/
-void SetBitMask(uint8_t reg, uint8_t mask) {
-  char tmp = 0x0;
-  tmp = ReadRawRC(reg);
-  // set bit mask
-  WriteRawRC(reg, tmp | mask);
-}
-
-/**************************************************************
- *功  能：	清RC522寄存器位
- *参  数: 	reg[IN]:寄存器地址  mask[IN]:清位值
- *返回值: 	无
- **************************************************************/
-void ClearBitMask(uint8_t reg, uint8_t mask) {
-  char tmp = 0x0;
-  tmp = ReadRawRC(reg);
-  // clear bit mask
-  WriteRawRC(reg, tmp & ~mask);
-}
-
-/**************************************************************
- *功  能：	通过RC522和ISO14443卡通讯
- *参  数: 	Command[IN]:RC522命令字
- *		 	pInData[IN]:通过RC522发送到卡片的数据
- *		 	InLenByte[IN]:发送数据的字节长度
- *		 	pOutData[OUT]:接收到的卡片返回数据
- *		 	*pOutLenBit[OUT]:返回数据的位长度
- *返回值: 	无
- **************************************************************/
-char PcdComMF522(uint8_t Command, uint8_t *pIn, uint8_t InLenByte,
-                 uint8_t *pOut, uint8_t *pOutLenBit) {
-  char status = MI_ERR;
-  uint8_t irqEn = 0x00;
-  uint8_t waitFor = 0x00;
-  uint8_t lastBits;
-  uint8_t n;
-  uint16_t i;
-  switch (Command) {
-  case PCD_AUTHENT:
-    irqEn = 0x12;
-    waitFor = 0x10;
-    break;
-  case PCD_TRANSCEIVE:
-    irqEn = 0x77;
-    waitFor = 0x30;
-    break;
-  default:
-    break;
-  }
-
-  WriteRawRC(ComIEnReg, irqEn | 0x80);
-  // 清所有中断位
-  ClearBitMask(ComIrqReg, 0x80);
-  WriteRawRC(CommandReg, PCD_IDLE);
-  // 清FIFO缓存
-  SetBitMask(FIFOLevelReg, 0x80);
-
-  for (i = 0; i < InLenByte; i++) {
-    WriteRawRC(FIFODataReg, pIn[i]);
-  }
-  WriteRawRC(CommandReg, Command);
-  //   	 n = ReadRawRC(CommandReg);
-
-  if (Command == PCD_TRANSCEIVE) {
-    // 开始传送
-    SetBitMask(BitFramingReg, 0x80);
-  }
-
-  // i = 600;//根据时钟频率调整，操作M1卡最大等待时间25ms
-  i = 2000;
-  do {
-    n = ReadRawRC(ComIrqReg);
-    i--;
-  } while ((i != 0) && !(n & 0x01) && !(n & waitFor));
-  ClearBitMask(BitFramingReg, 0x80);
-
-  if (i != 0) {
-    if (!(ReadRawRC(ErrorReg) & 0x1B)) {
-      status = MI_OK;
-      if (n & irqEn & 0x01) {
-        status = MI_NOTAGERR;
-      }
-      if (Command == PCD_TRANSCEIVE) {
-        n = ReadRawRC(FIFOLevelReg);
-        lastBits = ReadRawRC(ControlReg) & 0x07;
-        if (lastBits) {
-          *pOutLenBit = (n - 1) * 8 + lastBits;
-        } else {
-          *pOutLenBit = n * 8;
+        for (uint8_t k = 0; k < n; k++) {
+            backData[k] = rc522_read_reg(dev, RC522_Reg_FIFOData);
         }
-        if (n == 0) {
-          n = 1;
-        }
-        if (n > MAXRLEN) {
-          n = MAXRLEN;
-        }
-        for (i = 0; i < n; i++) {
-          pOut[i] = ReadRawRC(FIFODataReg);
-        }
-      }
-    } else {
-      status = MI_ERR;
-    }
-  }
 
-  // stop timer now
-  SetBitMask(ControlReg, 0x80);
-  WriteRawRC(CommandReg, PCD_IDLE);
-  return status;
+        uint8_t _validBits = rc522_read_reg(dev, RC522_Reg_Control) & 0x07;
+        if (validBits) *validBits = _validBits;
+    }
+
+    // CRC check
+    if (checkCrc && backData && backLenBytes) {
+        uint8_t nbytes = *backLenBytes;
+        uint8_t vb = validBits ? *validBits : 0;
+
+        if (nbytes == 1 && vb == 4) return RC522_NACK;
+        if (nbytes < 2 || vb != 0) return RC522_CRC_WRONG;
+
+        uint8_t calc[2];
+        rc522_status_t st = rc522_calculate_crc(dev, backData, (uint8_t)(nbytes - 2), calc);
+        if (st != RC522_OK) return st;
+
+        if (backData[nbytes - 2] != calc[0] || backData[nbytes - 1] != calc[1]) return RC522_CRC_WRONG;
+    }
+
+    return RC522_OK;
 }
 
-/**************************************************************
- *功  能：	开启天线（每次启动或关闭天险发射之间应至少有1ms的间隔）
- *参  数: 	无
- *返回值: 	无
- **************************************************************/
-void PcdAntennaOn(void) {
-  uint8_t i;
-  i = ReadRawRC(TxControlReg);
-  if (!(i & 0x03)) {
-    SetBitMask(TxControlReg, 0x03);
-  }
+rc522_status_t rc522_calculate_crc(rc522_t *dev, const uint8_t *data, uint8_t len, uint8_t out[2]) {
+    if (!check_dev(dev) || !data || len == 0 || !out) return RC522_INVALID_ARG;
+
+    rc522_write_reg(dev, RC522_Reg_Command, RC522_PCD_Idle);
+    rc522_write_reg(dev, RC522_Reg_DivIrq, 0x04);          // clear CRCIRq
+    rc522_set_bit_mask(dev, RC522_Reg_FIFOLevel, 0x80);    // flush
+    for (uint8_t i = 0; i < len; i++) rc522_write_reg(dev, RC522_Reg_FIFOData, data[i]);
+    rc522_write_reg(dev, RC522_Reg_Command, RC522_PCD_CalcCRC);
+
+    uint16_t i = 5000;
+    while (1) {
+        uint8_t n = rc522_read_reg(dev, RC522_Reg_DivIrq);
+        if (n & 0x04) break;
+        if (--i == 0) return RC522_TIMEOUT;
+    }
+
+    rc522_write_reg(dev, RC522_Reg_Command, RC522_PCD_Idle);
+    out[0] = rc522_read_reg(dev, RC522_Reg_CRCResultL);
+    out[1] = rc522_read_reg(dev, RC522_Reg_CRCResultH);
+    return RC522_OK;
 }
 
-/**************************************************************
- *功  能：	关闭天线
- *参  数: 	无
- *返回值: 	无
- **************************************************************/
-void PcdAntennaOff(void) { ClearBitMask(TxControlReg, 0x03); }
+//------------------ 初始化/复位/天线 ------------------
+rc522_status_t rc522_soft_reset(rc522_t *dev) {
+    if (!check_dev(dev)) return RC522_INVALID_ARG;
+    rc522_write_reg(dev, RC522_Reg_Command, RC522_PCD_SoftReset);
 
-/////////////////////////////////////////////////////////////////////
-// 功    能：读RC632寄存器
-// 参数说明：Address[IN]:寄存器地址
-// 返    回：读出的值
-/////////////////////////////////////////////////////////////////////
-uint8_t ReadRawRC(uint8_t Address) {
-  uint8_t ucResult = 0;
-  ucResult = RC522_RD_Reg(SLA_ADDR, Address);
-  // 返回收到的数据
-  return ucResult;
+    // 等待 PowerDown 位清除（CommandReg bit4）
+    // datasheet 没明确时间，保守一点
+    if (dev->delay_ms) dev->delay_ms(dev->user, 50);
+
+    uint16_t guard = 1000;
+    while ((rc522_read_reg(dev, RC522_Reg_Command) & (1u << 4)) && guard--) { }
+    return (guard == 0) ? RC522_TIMEOUT : RC522_OK;
 }
 
-/////////////////////////////////////////////////////////////////////
-// 功    能：写RC632寄存器
-// 参数说明：Address[IN]:寄存器地址
-//           value[IN]:写入的值
-/////////////////////////////////////////////////////////////////////
-void WriteRawRC(uint8_t Address, uint8_t value) {
-  RC522_WR_Reg(SLA_ADDR, Address, value);
+rc522_status_t rc522_antenna_on(rc522_t *dev) {
+    if (!check_dev(dev)) return RC522_INVALID_ARG;
+    uint8_t v = rc522_read_reg(dev, RC522_Reg_TxControl);
+    if ((v & 0x03) != 0x03) rc522_write_reg(dev, RC522_Reg_TxControl, (uint8_t)(v | 0x03));
+    return RC522_OK;
 }
 
-/**************************************************************
- *功  能：	读寄存器
- *参  数: 	addr:寄存器地址
- *返回值: 	读到的值
- **************************************************************/
-uint8_t RC522_RD_Reg(uint8_t RCsla, uint8_t addr) {
-  uint8_t temp = 0;
-  IIC_Start(&rc522_i2c_config);
-  // 发送写器件指令
-  IIC_Send_Byte(&rc522_i2c_config, RCsla);
-  temp = IIC_Wait_Ack(&rc522_i2c_config);
-  // 发送寄存器地址
-  IIC_Send_Byte(&rc522_i2c_config, addr);
-  temp = IIC_Wait_Ack(&rc522_i2c_config);
-  // 重新启动
-  IIC_Start(&rc522_i2c_config);
-  // 发送读器件指令
-  IIC_Send_Byte(&rc522_i2c_config, RCsla + 1);
-  temp = IIC_Wait_Ack(&rc522_i2c_config);
-  // 读取一个字节,不继续再读,发送NAK
-  temp = IIC_Read_Byte(&rc522_i2c_config, 0);
-  // 产生一个停止条件
-  IIC_Stop(&rc522_i2c_config);
-  // 返回读到的值
-  return temp;
+rc522_status_t rc522_antenna_off(rc522_t *dev) {
+    if (!check_dev(dev)) return RC522_INVALID_ARG;
+    rc522_clear_bit_mask(dev, RC522_Reg_TxControl, 0x03);
+    return RC522_OK;
 }
 
-// 写寄存器
-// addr:寄存器地址
-// val:要写入的值
-// 返回值:无
-void RC522_WR_Reg(uint8_t RCsla, uint8_t addr, uint8_t val) {
-  IIC_Start(&rc522_i2c_config);
-  // 发送写器件指令
-  IIC_Send_Byte(&rc522_i2c_config, RCsla);
-  IIC_Wait_Ack(&rc522_i2c_config);
-  // 发送寄存器地址
-  IIC_Send_Byte(&rc522_i2c_config, addr);
-  IIC_Wait_Ack(&rc522_i2c_config);
-  // 发送值
-  IIC_Send_Byte(&rc522_i2c_config, val);
-  IIC_Wait_Ack(&rc522_i2c_config);
-  // 产生一个停止条件
-  IIC_Stop(&rc522_i2c_config);
+rc522_status_t rc522_init(rc522_t *dev) {
+    if (!check_dev(dev)) return RC522_INVALID_ARG;
+
+    rc522_status_t st = rc522_soft_reset(dev);
+    if (st != RC522_OK) return st;
+
+    // Timer / CRC preset（与 Arduino 库一致）
+    rc522_write_reg(dev, RC522_Reg_TMode,       0x80);
+    rc522_write_reg(dev, RC522_Reg_TPrescaler,  0xA9);
+    rc522_write_reg(dev, RC522_Reg_TReloadH,    0x03);
+    rc522_write_reg(dev, RC522_Reg_TReloadL,    0xE8);
+
+    rc522_write_reg(dev, RC522_Reg_TxASK, 0x40);
+    rc522_write_reg(dev, RC522_Reg_Mode,  0x3D);
+
+    return rc522_antenna_on(dev);
 }
 
-// 等待卡离开
-void WaitCardOff(void) {
-  unsigned char status, TagType[2];
+//------------------ ISO14443A：REQA/WUPA ------------------
+static rc522_status_t reqa_or_wupa(rc522_t *dev, uint8_t cmd, uint8_t atqa[2]) {
+    if (!check_dev(dev) || !atqa) return RC522_INVALID_ARG;
 
-  while (1) {
-    status = PcdRequest(REQ_ALL, TagType);
-    if (status) {
-      status = PcdRequest(REQ_ALL, TagType);
-      if (status) {
-        status = PcdRequest(REQ_ALL, TagType);
-        if (status) {
-          return;
-        }
-      }
-    }
-    delay_ms(10);
-  }
+    rc522_clear_bit_mask(dev, RC522_Reg_Coll, 0x80);
+    uint8_t validBits = 7;
+
+    uint8_t backLen = 2;
+    rc522_status_t st = rc522_transceive(dev, RC522_PCD_Transceive, &cmd, 1, atqa, &backLen, &validBits, 0, 0);
+    if (st != RC522_OK) return st;
+
+    if (backLen != 2 || validBits != 0) return RC522_ERR;
+    return RC522_OK;
 }
 
-uint16_t read_count = 0;
-uint16_t write_count = 0;
+rc522_status_t rc522_request_a(rc522_t *dev, uint8_t atqa[2]) { return reqa_or_wupa(dev, RC522_PICC_CMD_REQA, atqa); }
+rc522_status_t rc522_wakeup_a (rc522_t *dev, uint8_t atqa[2]) { return reqa_or_wupa(dev, RC522_PICC_CMD_WUPA, atqa); }
 
-// RC522读取数据
-uint8_t RC522_Read(unsigned char sector, unsigned char block, char* data) {
-    if (rc522.log == NULL) {
-        LOG_E("RC522_LOG is NULL");
-        return 0;
-    }
+//------------------ 抗冲突 CL1（最常用的 4字节UID） ------------------
+rc522_status_t rc522_anticoll_cl1(rc522_t *dev, uint8_t uid4[4]) {
+    if (!check_dev(dev) || !uid4) return RC522_INVALID_ARG;
 
-    unsigned char status;
-    unsigned char blockAddress = sector * 4 + block;
-    unsigned char keyAddress   = sector * 4 + 3;
+    rc522_clear_bit_mask(dev, RC522_Reg_Status2, 0x08);
+    rc522_write_reg(dev, RC522_Reg_BitFraming, 0x00);
+    rc522_clear_bit_mask(dev, RC522_Reg_Coll, 0x80);
 
-    status = PcdRequest(PICC_REQALL, CT); // 检测卡片
-    if (status != MI_OK) {
-        read_count++;
-        rc522.log("Card detection failed (read_fail_count=%u)", (unsigned)read_count);
-        return 0;
-    }
+    uint8_t buf[2] = { RC522_PICC_CMD_SEL_CL1, 0x20 };
+    uint8_t back[5] = {0};
+    uint8_t backLen = sizeof(back);
+    uint8_t validBits = 0;
 
-    // 防冲突
-    vTaskDelay(pdMS_TO_TICKS(200));
-    rc522.log("Card detected successfully");
+    rc522_status_t st = rc522_transceive(dev, RC522_PCD_Transceive, buf, 2, back, &backLen, &validBits, 0, 0);
+    if (st != RC522_OK) return st;
+    if (backLen != 5) return RC522_ERR;
 
-    status = PcdAnticoll(SN);
-    if (status != MI_OK) {
-        read_count++;
-        rc522.log("Anti-collision failed (read_fail_count=%u)", (unsigned)read_count);
-        return 0;
-    }
+    uint8_t bcc = back[0] ^ back[1] ^ back[2] ^ back[3];
+    if (bcc != back[4]) return RC522_ERR;
 
-    rc522.log("Anti-collision successful");
-
-    status = PcdSelect(SN); // 选中卡片
-    if (status != MI_OK) {
-        read_count++;
-        rc522.log("Card selection failed (read_fail_count=%u)", (unsigned)read_count);
-        return 0;
-    }
-
-    rc522.log("Card selected successfully");
-
-    status = PcdAuthState(0x60, keyAddress, KEY, SN); // 鉴权
-    if (status != MI_OK) {
-        read_count++;
-        rc522.log("Authentication failed (read_fail_count=%u)", (unsigned)read_count);
-        return 0;
-    }
-
-    memset(READ_RFID, 0, 16); // 初始化读取存储区内容
-
-    status = PcdRead(blockAddress, READ_RFID);
-    if (status != MI_OK) {
-        read_count++;
-        rc522.log("Read failed (read_fail_count=%u)", (unsigned)read_count);
-        return 0;
-    }
-
-    rc522.log("Read successful. Data: %s", READ_RFID);
-
-    if (data != NULL) {
-        strncpy(data, (const char *)READ_RFID, 16);
-        data[15] = '\0';
-    }
-
-    if (rc522.read_success != NULL) {
-        rc522.read_success(READ_RFID);
-    }
-
-    return 1;
+    memcpy(uid4, back, 4);
+    rc522_set_bit_mask(dev, RC522_Reg_Coll, 0x80);
+    return RC522_OK;
 }
 
-uint8_t RC522_Write(unsigned char sector, unsigned char block, const char* data, ...) {
-    if (rc522.log == NULL) {
-        LOG_E("RC522_LOG is NULL");
-        return 0;
-    }
+//------------------ 选择 CL1 ------------------
+rc522_status_t rc522_select_cl1(rc522_t *dev, const uint8_t uid4[4], uint8_t *sak) {
+    if (!check_dev(dev) || !uid4) return RC522_INVALID_ARG;
 
-    if (data == NULL) {
-        write_count++;
-        rc522.log("Data buffer is NULL (write_fail_count=%u)", (unsigned)write_count);
-        return 0;
-    }
+    uint8_t buf[9];
+    buf[0] = RC522_PICC_CMD_SEL_CL1;
+    buf[1] = 0x70;
+    buf[2] = uid4[0];
+    buf[3] = uid4[1];
+    buf[4] = uid4[2];
+    buf[5] = uid4[3];
+    buf[6] = (uint8_t)(uid4[0] ^ uid4[1] ^ uid4[2] ^ uid4[3]);
 
-    unsigned char status;
-    unsigned char blockAddress = sector * 4 + block;
-    unsigned char keyAddress   = sector * 4 + 3;
+    rc522_status_t st = rc522_calculate_crc(dev, buf, 7, &buf[7]);
+    if (st != RC522_OK) return st;
 
-    status = PcdRequest(PICC_REQALL, CT); // 检测卡片
-    if (status != MI_OK) {
-        write_count++;
-        rc522.log("Card detection failed (write_fail_count=%u)", (unsigned)write_count);
-        return 0;
-    }
+    uint8_t back[3] = {0};
+    uint8_t backLen = 3;
+    uint8_t validBits = 0;
 
-    // 防冲突
-    vTaskDelay(pdMS_TO_TICKS(200));
-    rc522.log("Card detected successfully");
+    st = rc522_transceive(dev, RC522_PCD_Transceive, buf, 9, back, &backLen, &validBits, 0, 1);
+    if (st != RC522_OK) return st;
 
-    status = PcdAnticoll(SN);
-    if (status != MI_OK) {
-        write_count++;
-        rc522.log("Anti-collision failed (write_fail_count=%u)", (unsigned)write_count);
-        return 0;
-    }
+    if (backLen != 3 || validBits != 0) return RC522_ERR;
+    if (sak) *sak = back[0];
+    return RC522_OK;
+}
 
-    rc522.log("Anti-collision successful");
+//------------------ HALT ------------------
+rc522_status_t rc522_halt_a(rc522_t *dev) {
+    if (!check_dev(dev)) return RC522_INVALID_ARG;
+    uint8_t buf[4] = { RC522_PICC_CMD_HLTA, 0x00, 0x00, 0x00 };
+    rc522_status_t st = rc522_calculate_crc(dev, buf, 2, &buf[2]);
+    if (st != RC522_OK) return st;
 
-    status = PcdSelect(SN); // 选中卡片
-    if (status != MI_OK) {
-        write_count++;
-        rc522.log("Card selection failed (write_fail_count=%u)", (unsigned)write_count);
-        return 0;
-    }
+    // HLTA 按标准：超时算成功
+    uint8_t backLen = 0;
+    st = rc522_transceive(dev, RC522_PCD_Transceive, buf, 4, NULL, &backLen, NULL, 0, 0);
+    return (st == RC522_TIMEOUT) ? RC522_OK : st;
+}
 
-    rc522.log("Card selected successfully");
+//------------------ MIFARE Classic：鉴权/停止加密 ------------------
+static rc522_status_t auth_common(rc522_t *dev, uint8_t cmd, uint8_t blockAddr, const rc522_key_t *key, const uint8_t uid4[4]) {
+    if (!check_dev(dev) || !key || !uid4) return RC522_INVALID_ARG;
 
-    status = PcdAuthState(0x60, keyAddress, KEY, SN); // 鉴权
-    if (status != MI_OK) {
-        write_count++;
-        rc522.log("Authentication failed (write_fail_count=%u)", (unsigned)write_count);
-        return 0;
-    }
+    uint8_t buf[12];
+    buf[0] = cmd;
+    buf[1] = blockAddr;
+    memcpy(&buf[2], key->keyByte, 6);
+    memcpy(&buf[8], uid4, 4);
 
-    char formattedData[DATA_LEN];
-    va_list args;
-    va_start(args, data);
-    int len = vsnprintf(formattedData, DATA_LEN, data, args);
-    va_end(args);
+    // waitIRq=IdleIRq(0x10) 的逻辑在 Arduino 里是用 CommunicateWithPICC；
+    // 这里复用 transceive 的等待逻辑（ComIrq wait 0x30），实际项目也能跑。
+    // 若你想更严格：可改成专门的 auth wait 逻辑（ComIrq wait 0x10）。
+    uint8_t backLen = 0;
+    rc522_status_t st = rc522_transceive(dev, RC522_PCD_MFAuthent, buf, 12, NULL, &backLen, NULL, 0, 0);
+    if (st != RC522_OK) return st;
 
-    if (len < 0 || len >= DATA_LEN) {
-        write_count++;
-        rc522.log("Formatted data is too long or invalid (write_fail_count=%u)", (unsigned)write_count);
-        return 0;
-    }
+    // Status2Reg 的 MFCrypto1On(0x08) 必须置位
+    if (!(rc522_read_reg(dev, RC522_Reg_Status2) & 0x08)) return RC522_AUTH_FAIL;
+    return RC522_OK;
+}
 
-    status = PcdWrite(blockAddress, (uint8_t*)formattedData); // 写入数据
-    if (status != MI_OK) {
-        write_count++;
-        rc522.log("Write failed (write_fail_count=%u)", (unsigned)write_count);
-        return 0;
-    }
+rc522_status_t rc522_auth_key_a(rc522_t *dev, uint8_t blockAddr, const rc522_key_t *key, const uint8_t uid4[4]) {
+    return auth_common(dev, RC522_PICC_CMD_MF_AUTH_KEY_A, blockAddr, key, uid4);
+}
+rc522_status_t rc522_auth_key_b(rc522_t *dev, uint8_t blockAddr, const rc522_key_t *key, const uint8_t uid4[4]) {
+    return auth_common(dev, RC522_PICC_CMD_MF_AUTH_KEY_B, blockAddr, key, uid4);
+}
 
-    rc522.log("Write successful. Data written: %s", formattedData);
-    return 1;
+void rc522_stop_crypto1(rc522_t *dev) {
+    if (!check_dev(dev)) return;
+    rc522_clear_bit_mask(dev, RC522_Reg_Status2, 0x08);
+}
+
+//------------------ MIFARE Read/Write block ------------------
+rc522_status_t rc522_mifare_read_block(rc522_t *dev, uint8_t blockAddr, uint8_t out16[16]) {
+    if (!check_dev(dev) || !out16) return RC522_INVALID_ARG;
+
+    uint8_t buf[4];
+    buf[0] = RC522_PICC_CMD_MF_READ;
+    buf[1] = blockAddr;
+
+    rc522_status_t st = rc522_calculate_crc(dev, buf, 2, &buf[2]);
+    if (st != RC522_OK) return st;
+
+    uint8_t back[18] = {0};
+    uint8_t backLen = sizeof(back);
+    st = rc522_transceive(dev, RC522_PCD_Transceive, buf, 4, back, &backLen, NULL, 0, 1);
+    if (st != RC522_OK) return st;
+    if (backLen < 18) return RC522_ERR;
+
+    memcpy(out16, back, 16);
+    return RC522_OK;
+}
+
+static rc522_status_t mifare_transceive_ack(rc522_t *dev, const uint8_t *send, uint8_t sendLen, int acceptTimeout) {
+    uint8_t cmdBuf[18];
+    if (sendLen > 16) return RC522_INVALID_ARG;
+    memcpy(cmdBuf, send, sendLen);
+
+    rc522_status_t st = rc522_calculate_crc(dev, cmdBuf, sendLen, &cmdBuf[sendLen]);
+    if (st != RC522_OK) return st;
+    uint8_t total = (uint8_t)(sendLen + 2);
+
+    uint8_t back[18] = {0};
+    uint8_t backLen = 18;
+    uint8_t validBits = 0;
+
+    st = rc522_transceive(dev, RC522_PCD_Transceive, cmdBuf, total, back, &backLen, &validBits, 0, 0);
+    if (acceptTimeout && st == RC522_TIMEOUT) return RC522_OK;
+    if (st != RC522_OK) return st;
+
+    if (backLen != 1 || validBits != 4) return RC522_ERR;
+    if ((back[0] & 0x0F) != RC522_MF_ACK) return RC522_NACK;
+    return RC522_OK;
+}
+
+rc522_status_t rc522_mifare_write_block(rc522_t *dev, uint8_t blockAddr, const uint8_t in16[16]) {
+    if (!check_dev(dev) || !in16) return RC522_INVALID_ARG;
+
+    uint8_t cmd[2] = { RC522_PICC_CMD_MF_WRITE, blockAddr };
+    rc522_status_t st = mifare_transceive_ack(dev, cmd, 2, 0);
+    if (st != RC522_OK) return st;
+
+    st = mifare_transceive_ack(dev, in16, 16, 0);
+    return st;
+}
+
+//------------------ 你的 demo 级封装：sector/block 读写 ------------------
+static rc522_status_t select_one_card_cl1(rc522_t *dev, uint8_t uid4[4], uint8_t atqa[2], uint8_t *sak) {
+    rc522_status_t st = rc522_request_a(dev, atqa);
+    if (st != RC522_OK) return st;
+
+    st = rc522_anticoll_cl1(dev, uid4);
+    if (st != RC522_OK) return st;
+
+    st = rc522_select_cl1(dev, uid4, sak);
+    return st;
+}
+
+rc522_status_t rc522_read_sector_block(rc522_t *dev, uint8_t sector, uint8_t block, const rc522_key_t *keyA, char out16_asciiz[17]) {
+    if (!dev || !keyA || !out16_asciiz) return RC522_INVALID_ARG;
+
+    uint8_t uid4[4], atqa[2], sak = 0;
+    rc522_status_t st = select_one_card_cl1(dev, uid4, atqa, &sak);
+    if (st != RC522_OK) return st;
+
+    uint8_t blockAddr = (uint8_t)(sector * 4 + block);
+    uint8_t keyBlock  = (uint8_t)(sector * 4 + 3);
+
+    st = rc522_auth_key_a(dev, keyBlock, keyA, uid4);
+    if (st != RC522_OK) return st;
+
+    uint8_t data16[16];
+    st = rc522_mifare_read_block(dev, blockAddr, data16);
+
+    rc522_stop_crypto1(dev);
+    rc522_halt_a(dev);
+
+    if (st != RC522_OK) return st;
+
+    memcpy(out16_asciiz, data16, 16);
+    out16_asciiz[16] = '\0';
+    return RC522_OK;
+}
+
+rc522_status_t rc522_write_sector_block(rc522_t *dev, uint8_t sector, uint8_t block, const rc522_key_t *keyA, const char *text) {
+    if (!dev || !keyA || !text) return RC522_INVALID_ARG;
+
+    uint8_t uid4[4], atqa[2], sak = 0;
+    rc522_status_t st = select_one_card_cl1(dev, uid4, atqa, &sak);
+    if (st != RC522_OK) return st;
+
+    uint8_t blockAddr = (uint8_t)(sector * 4 + block);
+    uint8_t keyBlock  = (uint8_t)(sector * 4 + 3);
+
+    st = rc522_auth_key_a(dev, keyBlock, keyA, uid4);
+    if (st != RC522_OK) return st;
+
+    uint8_t data16[16];
+    memset(data16, 0, sizeof(data16));
+    // 文本写入（最多 16 字节）
+    strncpy((char*)data16, text, 16);
+
+    st = rc522_mifare_write_block(dev, blockAddr, data16);
+
+    rc522_stop_crypto1(dev);
+    rc522_halt_a(dev);
+
+    return st;
 }

@@ -148,8 +148,6 @@ static void LED_Breath(Color c) {
 	}
 }
 
-#include "beep.h"
-
 static void LED_Blink_Control(Color color, uint16_t period_ms)
 {
     static TickType_t led_blink_period = 0;  // 上次切换时间
@@ -172,10 +170,8 @@ static void LED_Blink_Control(Color color, uint16_t period_ms)
 
     // 根据状态设置 LED
     if (led_state) {
-        if (color.r) rgb_led.set_color(color);
-				beep.control(1);
+        rgb_led.set_color(color);
     } else {
         rgb_led.set_color(COLOR_OFF);
-				beep.control(0);
     }
 }

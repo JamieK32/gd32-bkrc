@@ -431,11 +431,6 @@
               <FilePath>..\BSP\src\timer.c</FilePath>
             </File>
             <File>
-              <FileName>exti.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\BSP\src\exti.c</FilePath>
-            </File>
-            <File>
               <FileName>adc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\BSP\src\adc.c</FilePath>
@@ -566,9 +561,9 @@
               <FilePath>..\Modules\src\ultrasonic.c</FilePath>
             </File>
             <File>
-              <FileName>_74hc595.c</FileName>
+              <FileName>matrix.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Modules\src\_74hc595.c</FilePath>
+              <FilePath>..\Modules\src\matrix.c</FilePath>
             </File>
             <File>
               <FileName>matrix_data.c</FileName>
@@ -619,6 +614,16 @@
               <FileName>mlx90614.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Modules\src\mlx90614.c</FilePath>
+            </File>
+            <File>
+              <FileName>rc522_port.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\src\rc522_port.c</FilePath>
+            </File>
+            <File>
+              <FileName>rc522_user.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\src\rc522_user.c</FilePath>
             </File>
           </Files>
         </Group>

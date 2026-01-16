@@ -23,7 +23,8 @@
 #include "usart_lcd.h"
 #include "flame.h"
 #include "rc522.h"
-#include "_74hc595.h"
+#include "matrix.h"
+#include "matrix_data.h"
 #include "infrared_pyroelectric.h"
 #include "ultrasonic.h"
 #include "mpu6050.h"
@@ -42,4 +43,6 @@
 #include "ds18b20.h"
 #include "rtc.h"
 #include "mlx90614.h"
+#include "rc522_user.h"
+
 #endif 

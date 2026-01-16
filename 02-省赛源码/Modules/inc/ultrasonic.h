@@ -1,43 +1,40 @@
-#ifndef __ultrasonic_H_
-#define __ultrasonic_H_
+#ifndef ULTRASONIC_H
+#define ULTRASONIC_H
 
+#include <stdint.h>
 #include "gd32f4xx.h"
 #include "string.h"
 #include "stdio.h"
 #include "delay.h"
 #include "timer.h"
-#include "exti.h"
 #include "oled.h"
 
+#define ULTRASONIC_PORT_NAME "P22"
 
-#define Ultrasonic_OUT_RTC 			RCU_GPIOA
-#define Ultrasonic_OUT_GPIO_Port	GPIOA
-#define Ultrasonic_OUT_Pin 			GPIO_PIN_12
-
-#define Ultrasonic_IN_RTC 			RCU_GPIOA
-#define Ultrasonic_IN_GPIO_Port		GPIOA
-#define Ultrasonic_IN_Pin 			GPIO_PIN_11
-
-#define EXTI_x_IRQn 				EXTI10_15_IRQn
-#define	EXTI_SOURCE_GPIOx			EXTI_SOURCE_GPIOA
-#define EXTI_SOURCE_PINx			EXTI_SOURCE_PIN12                   
-#define EXTI_x  					EXTI_12
-#define EXTI_IRQHandler 			EXTI10_15_IRQHandler
-
-extern volatile uint32_t	status;		// 计数值
-extern volatile uint32_t	real_time;	// 读回值
-extern volatile float 	dis_temp;	// 距离计算值
-
-typedef struct ultrasonic_t {
-	void (*init)(void);
-	void (*test)(void);
-	float (*get_cm)(void);
-} ultrasonic_t;
-
-extern ultrasonic_t ultrasonic;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 void Ultrasonic_Init(void);
-void Ultrasonic_Test(void);
+
+/**
+ * 初始化后反复调用即可：
+ * - 内部自动持续测距（不需要你先 Trigger）
+ * - 返回最近一次的滤波距离（单位 cm）
+ */
 float Ultrasonic_Get_Cm(void);
 
+/**
+ * 可选：测试显示（内部也是自动持续测距）
+ */
+void Ultrasonic_Test(void);
+
+/**
+ * EXTI中断里调用
+ */
+void Ultrasonic_EXTI_Handler(void);
+
+#ifdef __cplusplus
+}
+#endif
 #endif

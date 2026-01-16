@@ -1,248 +1,160 @@
-/*
- * rc522.h
- *
- * created: 23/12/2024
- *  author:
- */
+#ifndef RC522_H
+#define RC522_H
 
-#ifndef _RC522_H
-#define _RC522_H
+#include <stdint.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
-#include "stdint.h"
-#include "stdarg.h"
-#include "gd32f4xx.h"
-#include "main.h"
-#include "freertos.h"
-#include "task.h"
+//==================== ç”¨æˆ·å¯é…ç½®ï¼šé”™è¯¯ç  ====================
+typedef enum {
+    RC522_OK           = 0,
+    RC522_ERR          = -1,
+    RC522_TIMEOUT      = -2,
+    RC522_NO_TAG       = -3,
+    RC522_COLLISION    = -4,
+    RC522_NO_ROOM      = -5,
+    RC522_CRC_WRONG    = -6,
+    RC522_AUTH_FAIL    = -7,
+    RC522_NACK         = -8,
+    RC522_INVALID_ARG  = -9
+} rc522_status_t;
 
-// ¸ù¾İĞ¾Æ¬ĞÅºÅÑ¡ÔñÉè±¸µØÖ·
-#define SLA_ADDR 0x5e
-    // #define SLA_ADDR 0x50
+//==================== ISO14443A å¸¸ç”¨å‘½ä»¤ ====================
+#define RC522_PICC_CMD_REQA          0x26
+#define RC522_PICC_CMD_WUPA          0x52
+#define RC522_PICC_CMD_CT            0x88
+#define RC522_PICC_CMD_SEL_CL1       0x93
+#define RC522_PICC_CMD_HLTA          0x50
 
-    /////////////////////////////////////////////////////////////////////
-    // MF522ÃüÁî×Ö
-    /////////////////////////////////////////////////////////////////////
+#define RC522_PICC_CMD_MF_AUTH_KEY_A 0x60
+#define RC522_PICC_CMD_MF_AUTH_KEY_B 0x61
+#define RC522_PICC_CMD_MF_READ       0x30
+#define RC522_PICC_CMD_MF_WRITE      0xA0
 
-#define PCD_IDLE 0x00       // È¡Ïûµ±Ç°ÃüÁî
-#define PCD_AUTHENT 0x0E    // ÑéÖ¤ÃÜÔ¿
-#define PCD_RECEIVE 0x08    // ½ÓÊÕÊı¾İ
-#define PCD_TRANSMIT 0x04   // ·¢ËÍÊı¾İ
-#define PCD_TRANSCEIVE 0x0C // ·¢ËÍ²¢½ÓÊÕÊı¾İ
-#define PCD_RESETPHASE 0x0F // ¸´Î»
-#define PCD_CALCCRC 0x03    // CRC¼ÆËã
+#define RC522_MF_ACK                 0x0A
+#define RC522_MF_KEY_SIZE            6
 
-/////////////////////////////////////////////////////////////////////
-// Mifare_One¿¨Æ¬ÃüÁî×Ö
-/////////////////////////////////////////////////////////////////////
-#define PICC_REQIDL 0x26    // Ñ°ÌìÏßÇøÄÚÎ´½øÈëĞİÃß×´Ì¬
-#define PICC_REQALL 0x52    // Ñ°ÌìÏßÇøÄÚÈ«²¿¿¨
-#define PICC_ANTICOLL1 0x93 // ·À³å×²
-#define PICC_ANTICOLL2 0x95 // ·À³å×²
-#define PICC_AUTHENT1A 0x60 // ÑéÖ¤AÃÜÔ¿
-#define PICC_AUTHENT1B 0x61 // ÑéÖ¤BÃÜÔ¿
-#define PICC_READ 0x30      // ¶Á¿é
-#define PICC_WRITE 0xA0     // Ğ´¿é
-#define PICC_DECREMENT 0xC0 // ¿Û¿î
-#define PICC_INCREMENT 0xC1 // ³äÖµ
-#define PICC_RESTORE 0xC2   // µ÷¿éÊı¾İµ½»º³åÇø
-#define PICC_TRANSFER 0xB0  // ±£´æ»º³åÇøÖĞÊı¾İ
-#define PICC_HALT 0x50      // ĞİÃß
+//==================== RC522 å¯„å­˜å™¨ï¼ˆä¸ Arduino åº“ä¸€è‡´ï¼‰ ====================
+typedef enum {
+    // Page 0
+    RC522_Reg_Command      = 0x01,
+    RC522_Reg_ComIEn       = 0x02,
+    RC522_Reg_DivIEn       = 0x03,
+    RC522_Reg_ComIrq       = 0x04,
+    RC522_Reg_DivIrq       = 0x05,
+    RC522_Reg_Error        = 0x06,
+    RC522_Reg_Status1      = 0x07,
+    RC522_Reg_Status2      = 0x08,
+    RC522_Reg_FIFOData     = 0x09,
+    RC522_Reg_FIFOLevel    = 0x0A,
+    RC522_Reg_Control      = 0x0C,
+    RC522_Reg_BitFraming   = 0x0D,
+    RC522_Reg_Coll         = 0x0E,
 
-/////////////////////////////////////////////////////////////////////
-// MF522 FIFO³¤¶È¶¨Òå
-/////////////////////////////////////////////////////////////////////
-#define DEF_FIFO_LENGTH 64 // FIFO size=64byte
-#define MAXRLEN 18
+    // Page 1
+    RC522_Reg_Mode         = 0x11,
+    RC522_Reg_TxMode       = 0x12,
+    RC522_Reg_RxMode       = 0x13,
+    RC522_Reg_TxControl    = 0x14,
+    RC522_Reg_TxASK        = 0x15,
+    RC522_Reg_RxSel        = 0x17,
+    RC522_Reg_RFCfg        = 0x26,
+    RC522_Reg_TMode        = 0x2A,
+    RC522_Reg_TPrescaler   = 0x2B,
+    RC522_Reg_TReloadH     = 0x2C,
+    RC522_Reg_TReloadL     = 0x2D,
 
-/////////////////////////////////////////////////////////////////////
-// MF522¼Ä´æÆ÷¶¨Òå
-/////////////////////////////////////////////////////////////////////
-// PAGE 0
-#define RFU00 0x00
-#define CommandReg 0x01
-#define ComIEnReg 0x02
-#define DivlEnReg 0x03
-#define ComIrqReg 0x04
-#define DivIrqReg 0x05
-#define ErrorReg 0x06
-#define Status1Reg 0x07
-#define Status2Reg 0x08
-#define FIFODataReg 0x09
-#define FIFOLevelReg 0x0A
-#define WaterLevelReg 0x0B
-#define ControlReg 0x0C
-#define BitFramingReg 0x0D
-#define CollReg 0x0E
-#define RFU0F 0x0F
-// PAGE 1
-#define RFU10 0x10
-#define ModeReg 0x11
-#define TxModeReg 0x12
-#define RxModeReg 0x13
-#define TxControlReg 0x14
-#define TxAutoReg 0x15
-#define TxSelReg 0x16
-#define RxSelReg 0x17
-#define RxThresholdReg 0x18
-#define DemodReg 0x19
-#define RFU1A 0x1A
-#define RFU1B 0x1B
-#define MifareReg 0x1C
-#define RFU1D 0x1D
-#define RFU1E 0x1E
-#define SerialSpeedReg 0x1F
-// PAGE 2
-#define RFU20 0x20
-#define CRCResultRegM 0x21
-#define CRCResultRegL 0x22
-#define RFU23 0x23
-#define ModWidthReg 0x24
-#define RFU25 0x25
-#define RFCfgReg 0x26
-#define GsNReg 0x27
-#define CWGsCfgReg 0x28
-#define ModGsCfgReg 0x29
-#define TModeReg 0x2A
-#define TPrescalerReg 0x2B
-#define TReloadRegH 0x2C
-#define TReloadRegL 0x2D
-#define TCounterValueRegH 0x2E
-#define TCounterValueRegL 0x2F
-// PAGE 3
-#define RFU30 0x30
-#define TestSel1Reg 0x31
-#define TestSel2Reg 0x32
-#define TestPinEnReg 0x33
-#define TestPinValueReg 0x34
-#define TestBusReg 0x35
-#define AutoTestReg 0x36
-#define VersionReg 0x37
-#define AnalogTestReg 0x38
-#define TestDAC1Reg 0x39
-#define TestDAC2Reg 0x3A
-#define TestADCReg 0x3B
-#define RFU3C 0x3C
-#define RFU3D 0x3D
-#define RFU3E 0x3E
-#define RFU3F 0x3F
+    // Page 2
+    RC522_Reg_CRCResultH   = 0x21,
+    RC522_Reg_CRCResultL   = 0x22,
 
-#define REQ_ALL 0x52
-#define KEYA 0x60
-#define KEYB 0x61
+    // Page 3
+    RC522_Reg_Version      = 0x37
+} rc522_reg_t;
 
-/////////////////////////////////////////////////////////////////////
-// ºÍMF522Í¨Ñ¶Ê±·µ»ØµÄ´íÎó´úÂë
-/////////////////////////////////////////////////////////////////////
-#define MI_OK 0
-#define MI_NOTAGERR (1)
-#define MI_ERR (2)
+//==================== PCD å‘½ä»¤ ====================
+typedef enum {
+    RC522_PCD_Idle       = 0x00,
+    RC522_PCD_CalcCRC    = 0x03,
+    RC522_PCD_Transceive = 0x0C,
+    RC522_PCD_MFAuthent  = 0x0E,
+    RC522_PCD_SoftReset  = 0x0F
+} rc522_pcd_cmd_t;
 
-#define SHAQU1 0X01
-#define KUAI4 0X04
-#define KUAI7 0X07
-#define REGCARD 0xa1
-#define CONSUME 0xa2
-#define READCARD 0xa3
-#define ADDMONEY 0xa4
+//==================== UID / Key ====================
+typedef struct {
+    uint8_t size;          // 4/7/10
+    uint8_t uidByte[10];
+    uint8_t sak;
+} rc522_uid_t;
 
-//×ÔĞĞÌí¼ÓµÄ³£Á¿
-#define DATA_LEN 16
+typedef struct {
+    uint8_t keyByte[RC522_MF_KEY_SIZE];
+} rc522_key_t;
 
-typedef struct rc522_i
-{
-  void (*read_success)(unsigned char *);
-	void (*log)(const char *, ...);
-	void (*init)(void);
-	uint8_t (*read)(unsigned char, unsigned char, char *);
-	uint8_t (*write)(unsigned char, unsigned char, const char *, ...);
-	const char port_name[4];
-} rc522_i;
+//==================== åº•å±‚ I2C æŠ½è±¡ ====================
+// ä½ åªè¦å®ç°è¿™ä¸¤ä¸ªå‡½æ•°ï¼ˆæˆ–ç”¨ä½ è‡ªå·±çš„ IIC_XXX åŒ…ä¸€å±‚ï¼‰
+// è¦æ±‚ï¼šå¯¹ RC522 çš„â€œå¯„å­˜å™¨åœ°å€ regâ€è¿›è¡Œè¯»å†™
+typedef int (*rc522_i2c_write_reg_fn)(void *user, uint8_t dev_addr, uint8_t reg, uint8_t value);
+typedef int (*rc522_i2c_read_reg_fn) (void *user, uint8_t dev_addr, uint8_t reg, uint8_t *value);
 
-extern rc522_i rc522;
+// å¯é€‰ï¼šå»¶æ—¶ï¼ˆä¸ä¼ åˆ™åº“å†…ä¸ä¸»åŠ¨ delayï¼‰
+typedef void (*rc522_delay_ms_fn)(void *user, uint32_t ms);
 
+// å¯é€‰ï¼šæ—¥å¿—
+typedef void (*rc522_log_fn)(void *user, const char *fmt, ...);
 
-// ³õÊ¼»¯RC522
-void InitRc522(void);
+//==================== è®¾å¤‡å¥æŸ„ ====================
+typedef struct {
+    uint8_t dev_addr;                 // I2C 7-bit åœ°å€(å·¦å¯¹é½/å³å¯¹é½æŒ‰ä½ åº•å±‚å®ç°ï¼›æ¨èä¼  0x28/0x29 è¿™ç§â€œ7-bitâ€)
+    void *user;
 
-// Çå³ı¼Ä´æÆ÷µÄÌØ¶¨Î»
-void ClearBitMask(uint8_t reg, uint8_t mask);
+    rc522_i2c_write_reg_fn i2c_wr;
+    rc522_i2c_read_reg_fn  i2c_rd;
 
-// Ğ´ÈëÊı¾İµ½RC522¼Ä´æÆ÷
-void WriteRawRC(uint8_t Address, uint8_t value);
+    rc522_delay_ms_fn delay_ms;       // å¯ NULL
+    rc522_log_fn log;                 // å¯ NULL
+} rc522_t;
 
-// ÉèÖÃ¼Ä´æÆ÷µÄÌØ¶¨Î»
-void SetBitMask(uint8_t reg, uint8_t mask);
+//==================== API ====================
+rc522_status_t rc522_init(rc522_t *dev);
+rc522_status_t rc522_soft_reset(rc522_t *dev);
 
-// Ö´ĞĞRC522ÃüÁî
-char PcdComMF522(uint8_t Command, uint8_t *pIn, uint8_t InLenByte,
-                 uint8_t *pOut, uint8_t *pOutLenBit);
+rc522_status_t rc522_antenna_on(rc522_t *dev);
+rc522_status_t rc522_antenna_off(rc522_t *dev);
 
-// ¼ÆËãCRCĞ£ÑéÂë
-void CalulateCRC(uint8_t *pIn, uint8_t len, uint8_t *pOut);
+uint8_t        rc522_read_reg(rc522_t *dev, uint8_t reg);
+void           rc522_write_reg(rc522_t *dev, uint8_t reg, uint8_t val);
+void           rc522_set_bit_mask(rc522_t *dev, uint8_t reg, uint8_t mask);
+void           rc522_clear_bit_mask(rc522_t *dev, uint8_t reg, uint8_t mask);
 
-// ¶ÁÈ¡RC522¼Ä´æÆ÷µÄÊı¾İ
-uint8_t ReadRawRC(uint8_t Address);
+rc522_status_t rc522_calculate_crc(rc522_t *dev, const uint8_t *data, uint8_t len, uint8_t out[2]);
 
-// ´ò¿ªRC522µÄÌìÏß
-void PcdAntennaOn(void);
+// ISO14443A åŸºæœ¬æµç¨‹
+rc522_status_t rc522_request_a(rc522_t *dev, uint8_t atqa[2]);     // REQA
+rc522_status_t rc522_wakeup_a (rc522_t *dev, uint8_t atqa[2]);     // WUPA
+rc522_status_t rc522_anticoll_cl1(rc522_t *dev, uint8_t uid4[4]);  // åªåš CL1(4å­—èŠ‚UID)çš„æœ€å¸¸ç”¨ç‰ˆæœ¬
+rc522_status_t rc522_select_cl1(rc522_t *dev, const uint8_t uid4[4], uint8_t *sak);
 
-// ¸´Î»RC522
-char PcdReset(void);
+rc522_status_t rc522_halt_a(rc522_t *dev);
 
-// ·¢ËÍÇëÇóÃüÁî£¬¼ì²â¿¨Æ¬ÀàĞÍ
-char PcdRequest(unsigned char req_code, unsigned char *pTagType);
+// MIFARE Classic
+rc522_status_t rc522_auth_key_a(rc522_t *dev, uint8_t blockAddr, const rc522_key_t *key, const uint8_t uid4[4]);
+rc522_status_t rc522_auth_key_b(rc522_t *dev, uint8_t blockAddr, const rc522_key_t *key, const uint8_t uid4[4]);
+void           rc522_stop_crypto1(rc522_t *dev);
 
-// ´ò¿ªRC522µÄÌìÏß
-void PcdAntennaOn(void);
+rc522_status_t rc522_mifare_read_block (rc522_t *dev, uint8_t blockAddr, uint8_t out16[16]);
+rc522_status_t rc522_mifare_write_block(rc522_t *dev, uint8_t blockAddr, const uint8_t in16[16]);
 
-// ¹Ø±ÕRC522µÄÌìÏß
-void PcdAntennaOff(void);
-
-// ÅäÖÃRC522ÎªISO14443ÀàĞÍ
-char M500PcdConfigISOType(unsigned char type);
-
-// ·ÀÅö×²¼ì²â£¬»ñÈ¡¿¨Æ¬ĞòÁĞºÅ
-char PcdAnticoll(unsigned char *pSnr);
-
-// Ñ¡Ôñ¿¨Æ¬
-char PcdSelect(unsigned char *pSnr);
-
-// ÑéÖ¤¿¨Æ¬ÃÜÂë
-char PcdAuthState(unsigned char auth_mode, unsigned char addr,
-                  unsigned char *pKey, unsigned char *pSnr);
-
-// Ïò¿¨Æ¬Ğ´Êı¾İ
-char PcdWrite(unsigned char addr, unsigned char *pData);
-
-// ´Ó¿¨Æ¬¶ÁÊı¾İ
-char PcdRead(unsigned char addr, unsigned char *pData);
-
-// ÈÃ¿¨Æ¬½øÈëĞİÃß×´Ì¬
-char PcdHalt(void);
-
-// ¸´Î»RC522
-void Reset_RC522(void);
-
-// ¶ÁÈ¡RC522¼Ä´æÆ÷£¨Í¨¹ıI2C/SPI½Ó¿Ú£©
-uint8_t RC522_RD_Reg(uint8_t RCsla, uint8_t addr);
-
-// Ğ´ÈëRC522¼Ä´æÆ÷£¨Í¨¹ıI2C/SPI½Ó¿Ú£©
-void RC522_WR_Reg(uint8_t RCsla, uint8_t addr, uint8_t val);
-
-// µÈ´ı¿¨Æ¬ÒÆ³ö¸ĞÓ¦Çø
-void WaitCardOff(void);
-
-//ÖØÒª¶ÁĞ´¿¨Æ¬
-uint8_t RC522_Read(unsigned char sector, unsigned char block, char* data);
-uint8_t RC522_Write(unsigned char sector, unsigned char block, const char* data, ...);
+// ä½  demo é‡Œçš„â€œæŒ‰ sector/block è¯»å†™â€çš„ä¾¿æ·å°è£…ï¼ˆM1: sector*4+blockï¼‰
+rc522_status_t rc522_read_sector_block (rc522_t *dev, uint8_t sector, uint8_t block, const rc522_key_t *keyA, char out16_asciiz[17]);
+rc522_status_t rc522_write_sector_block(rc522_t *dev, uint8_t sector, uint8_t block, const rc522_key_t *keyA, const char *text);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // _RC522_H
+#endif

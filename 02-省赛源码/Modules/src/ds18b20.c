@@ -13,12 +13,7 @@ author:
 // Celsius from Fahrenheit: C = (F - 32) * 5/9
 
 void ds18b20_delay_us(uint32_t us) {
-    taskDISABLE_INTERRUPTS();  // 进入临界区，禁用中断
-    uint32_t i = us * 42;  // 粗略计算，需校准
-    while (i--) {
-        __NOP();  // 确保编译器不优化掉空循环
-    }
-    taskENABLE_INTERRUPTS();   // 退出临界区，恢复中断
+	delay_us(us);
 }
 
 

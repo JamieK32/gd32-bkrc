@@ -207,17 +207,6 @@ void EXTI3_IRQHandler(void) {
     }
 }
 
-
-
-//用于超声波计时
-void TIMER1_IRQHandler(void) {
-  if (SET == timer_interrupt_flag_get(TIMER1, TIMER_INT_UP)) {
-			status++;
-  }
-  /* clear TIMER interrupt flag */
-  timer_interrupt_flag_clear(TIMER1, TIMER_INT_UP);
-}
-
 //系统串口中断
 //空函数不能删除，不然会空指针
 void USART0_IRQHandler(void) {
@@ -374,13 +363,3 @@ void USART5_IRQHandler(void) {
         }
     }
 }
-
-
-
-// 定时器中断处理函数 弃用
-//void TIMER3_IRQHandler(void) {
-//    if (timer_interrupt_flag_get(TIMER3, TIMER_INT_UP) == SET) {
-//        global_count++; // 计数器递增
-//        timer_interrupt_flag_clear(TIMER3, TIMER_INT_UP);
-//    }
-//}
