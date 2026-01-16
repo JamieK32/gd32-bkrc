@@ -21,6 +21,7 @@ typedef struct hmi_i {
 	void (*send_to_curve)(const char *, uint8_t, uint16_t, uint16_t, uint16_t);
 	uint16_t (*get_widget_val)(uint8_t *, uint16_t, const char *);
 	void (*get_wigit_string)(uint8_t *, uint16_t, const char *, char *);
+	void (*printf_throttled)(char *name, const char *format, ...);
 } hmi_i;
 
 extern hmi_i hmi;
@@ -29,6 +30,7 @@ extern hmi_i hmi;
 void usart_lcd_init(void);
 void HMI_send_string(char *name, char *showdata);
 void HMI_printf(char *name, const char *format, ...);
+void HMI_printf_throttled(char *name, const char *format, ...);
 void free_lcd_data(LcdData* lcd_data);
 LcdData* parse_lcd_number_data(uint8_t *data, uint16_t data_size);
 LcdData *parse_lcd_string_data(uint8_t *data, uint16_t data_size);

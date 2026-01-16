@@ -1,4 +1,4 @@
-#include "usart_lcd.h"
+#include "hmi.h"
 #include "oled.h"
 #include "usart.h"
 #include "gd32f4xx_it.h"
@@ -7,6 +7,9 @@ USART_Config lcd_usart_config;
 
 //连接P18端口
 #define MAX_BUFFER_SIZE 256
+
+#define HMI_PRINT_PERIOD_MS 300
+
 
 hmi_i hmi = {
     .init = usart_lcd_init,
@@ -17,6 +20,7 @@ hmi_i hmi = {
 		.get_widget_val = HMI_get_widget_val,
 		.get_wigit_string = HMI_get_wight_string,
 		.send_to_curve = HMI_send_curve,
+		.printf_throttled = HMI_printf_throttled,
 };
 
 static void usart_lcd_init(void) {
@@ -52,6 +56,27 @@ void HMI_printf(char *name, const char *format, ...) {
     // 调用 HMI_send_string 发送格式化后的数据
     HMI_send_string(name, showdata);
 }
+
+void HMI_printf_throttled(char *name, const char *format, ...)
+{
+    static TickType_t last_tick = 0;
+
+    TickType_t now = xTaskGetTickCount();
+    if ((now - last_tick) < pdMS_TO_TICKS(HMI_PRINT_PERIOD_MS)) {
+        return;   // 未到 500ms，直接丢弃
+    }
+    last_tick = now;
+
+    char showdata[MAX_BUFFER_SIZE];
+
+    va_list args;
+    va_start(args, format);
+    vsnprintf(showdata, sizeof(showdata), format, args);
+    va_end(args);
+
+    HMI_send_string(name, showdata);
+}
+
 
 static void HMI_send_to_slider(char *name, int num) {
   char buffer[MAX_BUFFER_SIZE];

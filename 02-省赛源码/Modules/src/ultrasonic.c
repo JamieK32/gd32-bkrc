@@ -53,8 +53,6 @@ static uint32_t g_last_trig_tick = 0;
 
 /* 你原版的稳定算法变量 */
 static float g_output_cm = 0.0f;
-static uint32_t g_avg_cnt = 0;
-static float g_avg_sum_mm = 0.0f; // dis_temp 的单位是 mm
 
 /* 你原来的全局也可以保留，但不再依赖 status 计数了 */
 volatile uint32_t real_time = 0;
@@ -139,8 +137,6 @@ void Ultrasonic_Init(void)
     g_last_trig_tick = 0;
 
     g_output_cm = 0.0f;
-    g_avg_cnt = 0;
-    g_avg_sum_mm = 0.0f;
 }
 
 /* ====== 状态机轮询：放 main while(1) 里一直调用 ====== */

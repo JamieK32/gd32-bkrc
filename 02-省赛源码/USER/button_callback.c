@@ -456,38 +456,48 @@ static void task12_releases(void) {
 
 //舵机任务 START
 static int16_t angle = 0;
-//舵机按键回调
-static void key_callback(uint8_t key_num) {
-	switch (key_num) {
-		case 0x01:
+
+static void task13_key_callback(Button* btn_handle) {
+	uint8_t key_num = btn_handle->button_id;
+		switch (key_num) {
+		case KEY_A:
+			beep.control(1);
 			if (angle < 90) angle += 10;
 			break;
-		case 0x02:
+		case KEY_B:
+		beep.control(0);
 			if (angle > -90) angle -= 10;
 			break;
-		case 0x04:
+		case KEY_C:
 			angle = 0;
 			break;
-		case 0x08:
+		case KEY_D:
 			angle = -90;
 			break;
 	}
 	servo.set_angle(angle);
 }
 
-static void TASK13_Thread(void *arg) {
-	key.init();
-	key.click_cb = key_callback;
-	servo.init();
-	servo.set_angle(angle);
-	for ( ; ; ) {
-		key.read_all();
-		char buffer[256];
-		snprintf(buffer, sizeof(buffer), "当前舵机角度为：%d 度", angle);
-		hmi.send_string("t0.txt", buffer);
-		delay_ms(10);
-	}
+static void TASK13_Thread(void *arg)
+{
+    const TickType_t xPeriod = pdMS_TO_TICKS(5);  // 5ms
+    TickType_t xLastWakeTime;
+
+    muti_button_init(task13_key_callback);
+    servo.init();
+    servo.set_angle(angle);
+
+    xLastWakeTime = xTaskGetTickCount();  // 记录起始时间
+    for (;;)
+    {
+        button_ticks();   // 每 5ms 调用一次
+
+        hmi.printf_throttled("t0.txt", "当前舵机角度为：%d 度", angle);
+
+        vTaskDelayUntil(&xLastWakeTime, xPeriod);
+    }
 }
+
 
 static void task13_releases(void) {
 	for (int i = 0; i < 2; i++) hmi.send_string("t0.txt", "任务已停止");
@@ -584,20 +594,20 @@ static void task16_releases(void) {
 
 //姿态传感器 MPU6050 END
 static uint16_t fan_speed = 0;
-
 //风扇传感器 START
-static void task17_key_callback(uint8_t key_num) {
+static void task17_key_callback(Button* btn_handle) {
+	uint8_t key_num = btn_handle->button_id;
 	switch (key_num) {
-		case 0x01:
+		case KEY_A:
 			if (fan_speed < 1000) fan_speed += 100;
 			break;
-		case 0x02:
+		case KEY_B:
 			if (fan_speed > 0) fan_speed -= 100;
 			break;
-		case 0x04:
+		case KEY_C:
 			fan_speed = 0;
 			break;
-		case 0x08:
+		case KEY_D:
 			fan_speed = 1000;
 			break;
 	}
@@ -606,13 +616,12 @@ static void task17_key_callback(uint8_t key_num) {
 
 static void TASK17_Thread(void *arg) {
 	fan.init();
-	key.init();
-	key.click_cb = task17_key_callback;
+	muti_button_init(task17_key_callback);
 	fan.set_speed(fan_speed);
 	for ( ; ; ) {
-		key.read_all();
-		hmi.printf("t0.txt", "风扇转速：%d", fan_speed);
-		delay_ms(20);
+		button_ticks();
+		hmi.printf_throttled("t0.txt", "风扇转速：%d", fan_speed);
+		delay_ms(5);
 	}
 }
 

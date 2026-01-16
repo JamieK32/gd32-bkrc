@@ -461,9 +461,9 @@
               <FilePath>..\Modules\src\beep.c</FilePath>
             </File>
             <File>
-              <FileName>key.c</FileName>
+              <FileName>button_user.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Modules\src\key.c</FilePath>
+              <FilePath>..\Modules\src\button_user.c</FilePath>
             </File>
             <File>
               <FileName>bh1750.c</FileName>
@@ -501,9 +501,9 @@
               <FilePath>..\Modules\src\speak.c</FilePath>
             </File>
             <File>
-              <FileName>usart_lcd.c</FileName>
+              <FileName>hmi.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Modules\src\usart_lcd.c</FilePath>
+              <FilePath>..\Modules\src\hmi.c</FilePath>
             </File>
             <File>
               <FileName>raspberryPi.c</FileName>
@@ -624,6 +624,11 @@
               <FileName>rc522_user.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Modules\src\rc522_user.c</FilePath>
+            </File>
+            <File>
+              <FileName>multi_button.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\src\multi_button.c</FilePath>
             </File>
           </Files>
         </Group>
