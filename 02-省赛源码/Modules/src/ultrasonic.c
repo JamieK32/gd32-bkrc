@@ -22,7 +22,6 @@
 #define TRIG_US 10u
 #define RETRIGGER_US 60000u // 建议 60ms 防串音
 #define TIMEOUT_US 30000u   // 30ms 超时
-#define AVG_N 10u
 
 /* 10us tick：TIMER1 每次更新中断 = 10us（arr=10-1, psc=...） */
 #define TICK_US 10u

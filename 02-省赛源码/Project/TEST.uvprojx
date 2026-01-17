@@ -456,14 +456,29 @@
               <FilePath>..\Modules\src\rgb_led.c</FilePath>
             </File>
             <File>
-              <FileName>beep.c</FileName>
+              <FileName>rgb_led_sm.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Modules\src\beep.c</FilePath>
+              <FilePath>..\Modules\src\rgb_led_sm.c</FilePath>
+            </File>
+            <File>
+              <FileName>multi_button.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\src\multi_button.c</FilePath>
             </File>
             <File>
               <FileName>button_user.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Modules\src\button_user.c</FilePath>
+            </File>
+            <File>
+              <FileName>oled.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\src\oled.c</FilePath>
+            </File>
+            <File>
+              <FileName>beep.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\src\beep.c</FilePath>
             </File>
             <File>
               <FileName>bh1750.c</FileName>
@@ -476,11 +491,6 @@
               <FilePath>..\Modules\src\hx711.c</FilePath>
             </File>
             <File>
-              <FileName>oled.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Modules\src\oled.c</FilePath>
-            </File>
-            <File>
               <FileName>ch455g.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Modules\src\ch455g.c</FilePath>
@@ -489,11 +499,6 @@
               <FileName>mpu6050.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Modules\src\mpu6050.c</FilePath>
-            </File>
-            <File>
-              <FileName>rc522.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Modules\src\rc522.c</FilePath>
             </File>
             <File>
               <FileName>speak.c</FileName>
@@ -616,6 +621,11 @@
               <FilePath>..\Modules\src\mlx90614.c</FilePath>
             </File>
             <File>
+              <FileName>rc522.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Modules\src\rc522.c</FilePath>
+            </File>
+            <File>
               <FileName>rc522_port.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Modules\src\rc522_port.c</FilePath>
@@ -624,11 +634,6 @@
               <FileName>rc522_user.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Modules\src\rc522_user.c</FilePath>
-            </File>
-            <File>
-              <FileName>multi_button.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Modules\src\multi_button.c</FilePath>
             </File>
           </Files>
         </Group>

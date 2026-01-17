@@ -5,18 +5,6 @@
 
 #define RC522_MAX_FRAME_LEN 64
 
-//------------------ 内部工具 ------------------
-static void logf(rc522_t *d, const char *fmt, ...) {
-    if (!d || !d->log) return;
-    va_list ap;
-    va_start(ap, fmt);
-    d->log(d->user, fmt, ap); // ⚠️ 如果你 log 回调不支持 va_list，就把这个函数删掉，直接在外面 printf
-    va_end(ap);
-}
-
-// 为了兼容“log(fmt,...)”这种回调，这里不强行用 va_list。
-// 你更推荐把 dev->log 定义成 printf 风格（你 demo 已经是这样），那就别用上面的 logf。
-
 static int check_dev(rc522_t *dev) {
     return dev && dev->i2c_wr && dev->i2c_rd;
 }
