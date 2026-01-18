@@ -15,7 +15,6 @@ rgb_led_i rgb_led =  {
     .off = LED_OFF,
     .set_pwm_timer = LED_Set_Color_TimerPwm,
 		.stop_pwm_timer = LED_Stop_TimerPwm,
-		.breath = LED_Breath,
 		.blink_control = LED_Blink_Control,
 };
 
@@ -135,17 +134,6 @@ static void LED_Stop_TimerPwm(void) {
         xTimerStop(ledTimerHandle, 0);
         LED_Set_Color(COLOR_OFF);
     }
-}
-
-static void LED_Breath(Color c) {
-	for (int i = 0; i <= 100; i++) {
-		rgb_led.set_pwm_timer(c, i, LED_DEFAULT_FREQ);
-		delay_ms(15);
-	}
-	for (int i = 100; i >= 0; i--) {
-		rgb_led.set_pwm_timer(c, i, LED_DEFAULT_FREQ);
-		delay_ms(15);
-	}
 }
 
 static void LED_Blink_Control(Color color, uint16_t period_ms)

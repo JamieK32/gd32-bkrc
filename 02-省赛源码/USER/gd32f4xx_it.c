@@ -234,7 +234,6 @@ void process_usart2_received_data(uint8_t *data, uint16_t length) {
     }
 }
 
-#if defined(NEW_XIAO_CHUANG)
 //小创语音中断接受数据
 void USART1_IRQHandler(void) {
   if (RESET != usart_flag_get(USART1, USART_FLAG_RBNE)) {
@@ -266,48 +265,7 @@ void USART1_IRQHandler(void) {
     }
   }
 }
-#elif defined(OLD_XIAO_CHUANG)
-void USART1_IRQHandler(void) {
-  if (RESET != usart_flag_get(USART1, USART_FLAG_RBNE)) {
-    usart1_rx_data = usart_data_receive(USART1);
-    
-    if (USART1_FLAG == 0x00) {
-      // 检查第一个帧头字节 0x55
-      if (usart1_rx_data == 0x55) {
-        USART1_FLAG = 0x01;
-        usart1_rxcount = 0;
-        usart1_rxbuffer[usart1_rxcount++] = usart1_rx_data; // 保存第一个帧头字节
-      }
-    } else if (USART1_FLAG == 0x01) {
-      // 检查第二个帧头字节 0x02
-      if (usart1_rx_data == 0x02) {
-        USART1_FLAG = 0x02;
-        usart1_rxbuffer[usart1_rxcount++] = usart1_rx_data; // 保存第二个帧头字节
-      } else {
-        // 如果第二个字节不是0x02，重置接收状态
-        USART1_FLAG = 0x00;
-        usart1_rxcount = 0;
-      }
-    } else if (USART1_FLAG == 0x02) {
-      // 保存数据
-      usart1_rxbuffer[usart1_rxcount++] = usart1_rx_data;
-      
-      // 检查帧尾 0x00
-      if (usart1_rx_data == 0x00) {
-        voiceFlag = 0x01; // 设置处理标志，表示接收到完整数据帧
-        USART1_FLAG = 0x00; // 重置接收状态，准备接收下一帧
-        // usart1_rxcount 此时包含完整帧长度（包括帧头和帧尾）
-      }
-      
-      // 防止缓冲区溢出
-      if (usart1_rxcount >= usart1_rx_size) {
-        USART1_FLAG = 0x00;
-        usart1_rxcount = 0;
-      }
-    }
-  }
-}
-#endif
+
 
 
 //串口屏数据接收

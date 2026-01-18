@@ -46,7 +46,6 @@ typedef struct {
 typedef struct rgb_led_i {
     void (*init)(void);
     void (*test)(void);
-		void (*breath)(Color);
     void (*set_rgb)(uint8_t, uint8_t, uint8_t);
 		void (*blink_control)(Color, uint16_t);
     void (*set_color)(Color);

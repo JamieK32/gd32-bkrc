@@ -456,11 +456,6 @@
               <FilePath>..\Modules\src\rgb_led.c</FilePath>
             </File>
             <File>
-              <FileName>rgb_led_sm.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\Modules\src\rgb_led_sm.c</FilePath>
-            </File>
-            <File>
               <FileName>multi_button.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Modules\src\multi_button.c</FilePath>

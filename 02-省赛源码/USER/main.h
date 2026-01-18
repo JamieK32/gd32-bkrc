@@ -53,13 +53,6 @@ typedef struct {
 
 extern QueueHandle_t uartQueue;
 
-//新版本小创
-#define NEW_XIAO_CHUANG
-//旧版本小创
-//#define OLD_XIAO_CHUANG
-
-/* led spark function */
-
 // 打印调试信息
 #define LOG_I(fmt, ...) printf("[INFO] " fmt "\n", ##__VA_ARGS__)
 
