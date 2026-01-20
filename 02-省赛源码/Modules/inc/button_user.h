@@ -34,7 +34,9 @@ typedef enum {
 	BUTTON_NUM,
 } BUTTON_ID;
 
-void muti_button_init(BtnCallback single_click_cb);
+void multi_button_init(BtnCallback single_click_cb);
+void multi_button_register_callbacks(BtnCallback long_press_cb);
+
 extern struct _Button buttons[BUTTON_NUM];
 
 

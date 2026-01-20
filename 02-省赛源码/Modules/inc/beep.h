@@ -19,6 +19,9 @@ static void BEEP_Control(char state);
 static void Play_Db(uint16_t db);
 static void Beep_Play_Music(const uint8_t *music, uint16_t length);
 
+void beep_set_count(uint32_t duration_ms, uint8_t state);
+void beep_tick_process(void);
+
 typedef struct beep_i {
 	uint8_t state;
   void (*init)(void);

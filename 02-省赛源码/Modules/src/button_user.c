@@ -30,7 +30,7 @@ static inline uint8_t read_button_GPIO(uint8_t button_id)
     }
 }
 
-void muti_button_init(BtnCallback single_click_cb)
+void multi_button_init(BtnCallback single_click_cb)
 {
 		rcu_periph_clock_enable(KEY_1_RTC);
 		rcu_periph_clock_enable(KEY_2_RTC);
@@ -48,4 +48,10 @@ void muti_button_init(BtnCallback single_click_cb)
         button_attach(&buttons[i], BTN_SINGLE_CLICK, single_click_cb);
         button_start(&buttons[i]);
     }
+}
+
+void multi_button_register_callbacks(BtnCallback long_press_cb) {
+  for (int i = 0; i < BUTTON_NUM; i++) {
+		 button_attach(&buttons[i], BTN_LONG_PRESS_START, long_press_cb);
+	}
 }

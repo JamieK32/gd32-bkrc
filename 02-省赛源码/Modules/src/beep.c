@@ -11,12 +11,74 @@ beep_i beep = {
 		.play_db = Play_Db,
 };
 
+#define BEEP_GAP_MS   120   // 两次鸣叫之间的间隔
+
+static uint8_t  beep_cnt_left = 0;     // 剩余鸣叫次数
+static uint8_t  beep_phase = 0;        // 0=空闲 1=鸣叫中 2=间隔中
+static uint32_t beep_tick_mark = 0;    // 时间戳
+static uint32_t beep_on_ticks = 0;     // 单次鸣叫 tick
+static uint32_t beep_gap_ticks = 0;    // 间隔 tick
+
 //根据钢琴键位的频率写出
 static const uint16_t MusicalNote[] = {
     0, 262, 277, 294, 311, 330, 349, 370, 392, 415, 440, 466, 494,
     523, 554, 587, 622, 659, 698, 740, 784, 831, 880, 932, 988,
     1047, 1109, 1175, 1245, 1319, 1397, 1480, 1568, 1661, 1760, 1865, 1976
 };
+
+void beep_set_count(uint32_t duration_ms, uint8_t n)
+{
+    if (n == 0) return;
+
+    beep_cnt_left  = n;
+    beep_on_ticks  = pdMS_TO_TICKS(duration_ms);
+    beep_gap_ticks = pdMS_TO_TICKS(BEEP_GAP_MS);
+
+    beep_phase     = 1;  // 进入鸣叫阶段
+    beep_tick_mark = xTaskGetTickCount();
+
+    BEEP_Control(1);     // 立刻开始第一声
+}
+
+
+void beep_tick_process(void)
+{
+    uint32_t now = xTaskGetTickCount();
+
+    switch (beep_phase)
+    {
+        case 0: // 空闲
+            break;
+
+        case 1: // 正在鸣叫
+            if ((now - beep_tick_mark) >= beep_on_ticks)
+            {
+                BEEP_Control(0);
+                beep_cnt_left--;
+
+                if (beep_cnt_left == 0)
+                {
+                    beep_phase = 0;   // 全部完成
+                }
+                else
+                {
+                    beep_phase = 2;   // 进入间隔
+                    beep_tick_mark = now;
+                }
+            }
+            break;
+
+        case 2: // 间隔中
+            if ((now - beep_tick_mark) >= beep_gap_ticks)
+            {
+                BEEP_Control(1);      // 下一声
+                beep_phase = 1;
+                beep_tick_mark = now;
+            }
+            break;
+    }
+}
+
 
 static inline void BEEP_Init(void) {
   rcu_periph_clock_enable(BEEP_RTC);

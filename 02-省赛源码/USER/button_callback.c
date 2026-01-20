@@ -44,33 +44,113 @@ static void task1_releases(void) {
 
 
 //LED控制任务 START 
-static void waterfall_led(void)
-{
-	rgb_led.set_color(COLOR_BLUE);
-	delay_ms(1000);
-	rgb_led.set_color(COLOR_YELLOW);
-	delay_ms(1000);
-	beep.control(1);
-	rgb_led.set_color(COLOR_WHITE);
-	delay_ms(1000);
-	beep.control(0);
-	rgb_led.off();
-	delay_ms(3000);
+typedef enum {
+	S0,
+	S1,
+	S2,
+	S3,
+	S4,
+} Task2States;
+
+Task2States ts = S0;
+
+Color led_color_tables[3] = {
+		{1, 0, 0},
+    {0, 1, 0},
+    {0, 0, 1}
+};
+
+uint8_t color_idx = 0;
+
+uint8_t bright_level_table[4] = {10, 17, 23, 30};
+uint8_t level_idx = 0;
+
+uint8_t brightness = 0;
+uint8_t bright_flag = 0;
+
+uint32_t s3_start_time = 0;
+uint32_t s4_start_time = 0;
+
+void task2_on_click(Button* btn_handle) {
+	uint8_t id = btn_handle->button_id;
+	if (id == KEY_A) {
+		if (ts == S1) {
+			color_idx = (color_idx + 1) % 3;
+			beep_set_count(30, 1);
+		}
+		if (ts == S2) {
+			level_idx = (level_idx + 1) % 4;
+			beep_set_count(30, 1);
+		}
+	}
+
+}
+
+void task2_on_long_press(Button *btn_handle) {
+
+	uint8_t id = btn_handle->button_id;
+	if (id == KEY_A) {
+		ts = (Task2States)((ts + 1) % (S4 + 1));
+		if (ts == S3) {
+			beep_set_count(60, level_idx + 1);
+		} 
+		s3_start_time = xTaskGetTickCount();
+	}
 }
 
 static void TASK2_Thread(void *arg)
 {
 		rgb_led.init();
+		multi_button_init(task2_on_click);
+		multi_button_register_callbacks(task2_on_long_press);
 		beep.init();
     for (;;) 
     {
-			waterfall_led();
-			delay_ms(10);
+			button_ticks();
+			beep_tick_process();
+			switch ((uint8_t)ts) {
+					case S0: {
+						rgb_led.stop_pwm_timer();
+						rgb_led.off();
+						
+					} break;
+					case S1:
+					case S2: 
+						rgb_led.set_pwm_timer(led_color_tables[color_idx], bright_level_table[level_idx], LED_DEFAULT_FREQ);
+						break;
+					case S3: {
+
+						if (brightness == 100) {
+							bright_flag = 1;
+						} else if (brightness == 0) {
+							bright_flag = 0;	
+						}
+						if (bright_flag) {
+							brightness--;
+						} else {
+							brightness++;
+						}
+						rgb_led.set_pwm_timer(led_color_tables[color_idx], brightness, LED_DEFAULT_FREQ);
+						if (xTaskGetTickCount() - s3_start_time >= 5000) {
+							ts = S4;
+							s4_start_time = xTaskGetTickCount();
+							rgb_led.set_pwm_timer(led_color_tables[color_idx], 40, LED_DEFAULT_FREQ);
+						}
+					} break;
+					case S4: {
+						if (xTaskGetTickCount() - s4_start_time >= 2000) {
+							ts = S0;
+						}
+					} break;
+			}
+			delay_ms(5);
     }
 }
+
 static void task2_releases(void) {
 	beep.control(0);
 	rgb_led.off();
+	rgb_led.stop_pwm_timer();
 	for (int i = 0; i < 2; i++) hmi.send_string("t0.txt", "任务已停止");
 }
 //LED控制任务 END
@@ -483,7 +563,7 @@ static void TASK13_Thread(void *arg)
     const TickType_t xPeriod = pdMS_TO_TICKS(5);  // 5ms
     TickType_t xLastWakeTime;
 
-    muti_button_init(task13_key_callback);
+    multi_button_init(task13_key_callback);
     servo.init();
     servo.set_angle(angle);
 
@@ -616,7 +696,7 @@ static void task17_key_callback(Button* btn_handle) {
 
 static void TASK17_Thread(void *arg) {
 	fan.init();
-	muti_button_init(task17_key_callback);
+	multi_button_init(task17_key_callback);
 	fan.set_speed(fan_speed);
 	for ( ; ; ) {
 		button_ticks();
